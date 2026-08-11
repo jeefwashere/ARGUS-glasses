@@ -8,8 +8,8 @@ from deepgram import AsyncDeepgramClient
 FinalTranscriptCallback = Callable[[str], Awaitable[None]]
 
 
-class DeepgramFluxSession:
-    """Small wrapper around Deepgram Flux's async streaming websocket."""
+class DeepgramSession:
+    """Async wrapper around Deepgram Flux's streaming websocket."""
 
     def __init__(self, on_final_transcript: FinalTranscriptCallback):
         self._on_final_transcript = on_final_transcript
@@ -17,6 +17,13 @@ class DeepgramFluxSession:
         self._connection_manager: Any | None = None
         self._socket: Any | None = None
         self._listener_task: asyncio.Task[None] | None = None
+
+    async def __aenter__(self) -> "DeepgramSession":
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        await self.close()
 
     async def connect(self) -> None:
         api_key = os.getenv("DEEPGRAM_API_KEY")
@@ -63,6 +70,9 @@ class DeepgramFluxSession:
         self._listener_task = None
 
     async def _listen(self) -> None:
+        if self._socket is None:
+            raise RuntimeError("Deepgram session is not connected")
+
         async for message in self._socket:
             message_type = getattr(message, "type", None)
 
@@ -98,3 +108,6 @@ class DeepgramFluxSession:
         exc = self._listener_task.exception()
         if exc is not None:
             raise RuntimeError("Deepgram listener stopped unexpectedly") from exc
+
+
+DeepgramFluxSession = DeepgramSession

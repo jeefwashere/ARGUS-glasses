@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services import deepgram
-from app.services.deepgram import DeepgramFluxSession
+from app.services.deepgram import DeepgramSession
 
 
 class FakeSocket:
@@ -73,7 +73,7 @@ async def noop_callback(text):
 
 def test_connect_requires_deepgram_api_key(monkeypatch):
     monkeypatch.delenv("DEEPGRAM_API_KEY", raising=False)
-    session = DeepgramFluxSession(on_final_transcript=noop_callback)
+    session = DeepgramSession(on_final_transcript=noop_callback)
 
     with pytest.raises(RuntimeError, match="DEEPGRAM_API_KEY is not set"):
         asyncio.run(session.connect())
@@ -85,7 +85,7 @@ def test_connect_uses_flux_options_and_send_audio(monkeypatch):
     monkeypatch.setattr(deepgram, "AsyncDeepgramClient", FakeDeepgramClient)
 
     async def run_test():
-        session = DeepgramFluxSession(on_final_transcript=noop_callback)
+        session = DeepgramSession(on_final_transcript=noop_callback)
         await session.connect()
 
         client = FakeDeepgramClient.instances[0]
@@ -109,7 +109,7 @@ def test_connect_uses_flux_options_and_send_audio(monkeypatch):
 
 
 def test_send_audio_requires_connected_session():
-    session = DeepgramFluxSession(on_final_transcript=noop_callback)
+    session = DeepgramSession(on_final_transcript=noop_callback)
 
     with pytest.raises(RuntimeError, match="Deepgram session is not connected"):
         asyncio.run(session.send_audio(b"pcm bytes"))
@@ -125,11 +125,13 @@ def test_listen_emits_final_transcript_on_end_of_turn():
         SimpleNamespace(type="Connected"),
         SimpleNamespace(type="TurnInfo", event="StartOfTurn", transcript=""),
         SimpleNamespace(type="TurnInfo", event="Update", transcript="What am"),
-        SimpleNamespace(type="TurnInfo", event="EndOfTurn", transcript="What am I looking at?"),
+        SimpleNamespace(
+            type="TurnInfo", event="EndOfTurn", transcript="What am I looking at?"
+        ),
     ]
 
     async def run_test():
-        session = DeepgramFluxSession(on_final_transcript=collect_transcript)
+        session = DeepgramSession(on_final_transcript=collect_transcript)
         session._socket = FakeSocket(messages=messages)
         await session._listen()
 
@@ -144,7 +146,7 @@ def test_listen_raises_on_deepgram_error_messages():
     ]
 
     async def run_test():
-        session = DeepgramFluxSession(on_final_transcript=noop_callback)
+        session = DeepgramSession(on_final_transcript=noop_callback)
         session._socket = FakeSocket(messages=messages)
         await session._listen()
 
