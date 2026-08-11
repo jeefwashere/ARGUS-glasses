@@ -27,6 +27,7 @@ pydantic==2.13.4
 pydantic-extra-types==2.11.1
 pydantic-settings==2.15.0
 pydantic_core==2.46.4
+pydub==0.25.1
 Pygments==2.20.0
 pytest==9.1.1
 python-dotenv==1.2.2
