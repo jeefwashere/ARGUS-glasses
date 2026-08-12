@@ -18,6 +18,9 @@ ALLOWED_IMAGE_TYPES = {
 
 @router.websocket("/ask")
 async def ask(websocket: WebSocket):
+
+    # Adding numbers to comments to indicate the flow order of architecture
+    # 1. Websocket accepts or waits for connection
     await websocket.accept()
 
     thread_id: str | None = None
@@ -37,6 +40,8 @@ async def ask(websocket: WebSocket):
             path.unlink(missing_ok=True)
 
     async def submit_pending_turn() -> None:
+        """Receives final transcript from Deepgram and image if present and gives it to Backboard"""
+
         nonlocal thread_id
         nonlocal pending_transcript
         nonlocal pending_image_path
@@ -82,6 +87,14 @@ async def ask(websocket: WebSocket):
         await submit_pending_turn()
 
     async def handle_control_message(raw_text: str) -> bool:
+        """Handles text control messages such as stop, continue, image_end, image_start, etc.
+
+        Args:
+            raw_text (str): Control message
+
+        Returns:
+            bool: True being to keep the websocket loop running and false being to stop or close the websocket
+        """
         nonlocal thread_id
         nonlocal pending_image_path
         nonlocal receiving_image
@@ -89,66 +102,100 @@ async def ask(websocket: WebSocket):
         nonlocal upload_path
         nonlocal image_expected
 
+        # If control message is close then return false to stop the websocket loop
         if raw_text == "close":
             return False
 
         try:
+            # Deserialize the raw string into python objects in a dictionary
             message = json.loads(raw_text)
+
+        # If text fails to convert to dictionary, keep the websocket open
         except json.JSONDecodeError:
             await send_error("Text messages must be valid JSON control messages")
             return True
 
+        # Gets the value of the "type" field
         message_type = message.get("type")
 
+        # If the value is close then stop or close the websocket
         if message_type == "close":
             return False
 
+        # Control block for restoring an existing Backboard thread
         if message_type == "set_thread":
+
+            # Gets previously stored thread ID from the board
             new_thread_id = message.get("thread_id")
             if not new_thread_id:
                 await send_error("set_thread requires thread_id")
                 return True
 
+            # Sets the current thread ID used by the backend
             thread_id = new_thread_id
+
+            # Confirms to the board that the backend accepted the thread ID
             await websocket.send_json({"type": "thread_set", "thread_id": thread_id})
             return True
 
+        # If the message contains an image
         if message_type == "image_start":
 
+            # If an image is currently being received
             if receiving_image:
                 await send_error("An image upload is already in progress")
                 return True
+
+            # If an image is already uploaded
             if pending_image_path:
                 await send_error("An unused image is already waiting for a question")
                 return True
+
+            # If a question is being processed
             if submitting:
                 await send_error(
                     "Cannot attach an image while a question is submitting"
                 )
                 return True
 
+            # Gets image mime type
             content_type = message.get("content_type")
             suffix = ALLOWED_IMAGE_TYPES.get(content_type)
             if suffix is None:
                 await send_error("Unsupported image type")
                 return True
 
+            # Creates an empty temp file that the image can write into later
             upload_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+
+            # Sets the path of the image as the path of the empty temp file
             upload_path = Path(upload_file.name)
 
+            # Sets the flag to image is uploading
             receiving_image = True
+
+            # An image is now included in the question
             image_expected = True
 
+            # Confirmation sent to board that image is valid
             await websocket.send_json({"type": "image_started"})
             return True
 
+        # If image bytes are done being received
         if message_type == "image_end":
+
+            # Triggers if the image processing of earlier bytes encounters an error
             if not receiving_image or upload_file is None or upload_path is None:
                 await send_error("No image upload is in progress")
                 return True
 
+            # Clears temp file
             upload_file.close()
+
+            # Clears path
             pending_image_path = upload_path
+
+            # Clears and resets variables and flags
             upload_file = None
             upload_path = None
             receiving_image = False
@@ -159,19 +206,27 @@ async def ask(websocket: WebSocket):
         await send_error("Unknown control message type")
         return True
 
+    # 2. A Deepgram Session is instantiated
+    # On_final_transcript is assigned an event callback where the send_transcript function triggers upon callback being called
     session = DeepgramSession(on_final_transcript=send_transcript)
 
     try:
+        # 3. Connects to Deepgram
         await session.connect()
 
+        # Continuously streaming the message, all these comments are handwritten btw
         while True:
+            # Receives the message in the websocket
             message = await websocket.receive()
 
+            # If disconnect message, stop listening
             if message.get("type") == "websocket.disconnect":
                 break
 
+            # Gets the content of "text" field
             text = message.get("text")
             if text:
+                # Getting flag for websocket listening loop
                 should_continue = await handle_control_message(text)
                 if not should_continue:
                     break
