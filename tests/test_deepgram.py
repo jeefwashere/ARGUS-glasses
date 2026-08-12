@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services import deepgram
-from app.services.deepgram import DeepgramSession
+from app.services import deepgram_service
+from app.services.deepgram_service import DeepgramSession
 
 
 class FakeSocket:
@@ -82,7 +82,7 @@ def test_connect_requires_deepgram_api_key(monkeypatch):
 def test_connect_uses_flux_options_and_send_audio(monkeypatch):
     FakeDeepgramClient.instances = []
     monkeypatch.setenv("DEEPGRAM_API_KEY", "test-key")
-    monkeypatch.setattr(deepgram, "AsyncDeepgramClient", FakeDeepgramClient)
+    monkeypatch.setattr(deepgram_service, "AsyncDeepgramClient", FakeDeepgramClient)
 
     async def run_test():
         session = DeepgramSession(on_final_transcript=noop_callback)

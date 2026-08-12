@@ -3,9 +3,9 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 
-from app.routes.ask import router as ask_router
-
 load_dotenv()
+
+from app.routes.ask import router as ask_router
 
 app = FastAPI(
     title="Glasses API",
