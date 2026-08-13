@@ -9,7 +9,6 @@ colorama==0.4.6
 deepgram-sdk==7.6.0
 detect-installer==0.1.0
 dnspython==2.8.0
-elevenlabs==2.63.0
 email-validator==2.3.0
 fastapi==0.141.1
 fastapi-cli==0.0.32
