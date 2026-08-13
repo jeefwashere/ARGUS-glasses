@@ -82,10 +82,24 @@ def setup_route_mocks(monkeypatch, backboard=None, transcripts=None):
     FakeDeepgramSession.release_event = threading.Event()
 
     backboard = backboard or FakeBackboard()
+
+    async def fake_elevenlabs_tts(response_text):
+        return b"fake-pcm-audio"
+
     monkeypatch.setattr(ask_route, "DeepgramSession", FakeDeepgramSession)
     monkeypatch.setattr(ask_route, "call_backboard", backboard)
+    monkeypatch.setattr(ask_route, "elevenlabs_tts", fake_elevenlabs_tts)
 
     return backboard
+
+
+def assert_audio_frames(websocket):
+    assert websocket.receive_json() == {
+        "type": "audio_start",
+        "audio_format": "pcm_16000",
+    }
+    assert websocket.receive_bytes() == b"fake-pcm-audio"
+    assert websocket.receive_json() == {"type": "audio_end"}
 
 
 def test_first_question_speech_only(monkeypatch):
@@ -103,6 +117,7 @@ def test_first_question_speech_only(monkeypatch):
             "text": "answer for What am I looking at?",
             "thread_id": "thread-1",
         }
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert backboard.calls == [
@@ -132,10 +147,12 @@ def test_follow_up_speech_only_reuses_thread_id(monkeypatch):
         websocket.send_bytes(b"audio-1")
         websocket.receive_json()
         assert websocket.receive_json()["thread_id"] == "thread-123"
+        assert_audio_frames(websocket)
 
         websocket.send_bytes(b"audio-2")
         websocket.receive_json()
         assert websocket.receive_json()["text"] == "second answer"
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert backboard.calls[0]["thread_id"] is None
@@ -159,6 +176,7 @@ def test_first_question_speech_with_chunked_image(monkeypatch):
         websocket.send_bytes(b"audio")
         assert websocket.receive_json()["type"] == "transcript"
         assert websocket.receive_json()["type"] == "answer"
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert len(backboard.calls) == 1
@@ -186,6 +204,7 @@ def test_follow_up_speech_with_image_reuses_thread_id(monkeypatch):
         websocket.send_bytes(b"audio-1")
         websocket.receive_json()
         websocket.receive_json()
+        assert_audio_frames(websocket)
 
         websocket.send_text(
             json.dumps({"type": "image_start", "content_type": "image/jpeg"})
@@ -197,6 +216,7 @@ def test_follow_up_speech_with_image_reuses_thread_id(monkeypatch):
         websocket.send_bytes(b"audio-2")
         websocket.receive_json()
         websocket.receive_json()
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert backboard.calls[1]["question_text"] == "second with image"
@@ -224,6 +244,7 @@ def test_transcript_arrives_before_image_end_waits(monkeypatch):
         websocket.send_text(json.dumps({"type": "image_end"}))
         assert websocket.receive_json() == {"type": "image_received"}
         assert websocket.receive_json()["type"] == "answer"
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert len(backboard.calls) == 1
@@ -246,6 +267,7 @@ def test_image_finishes_before_transcript_waits(monkeypatch):
         websocket.send_bytes(b"audio")
         assert websocket.receive_json()["type"] == "transcript"
         assert websocket.receive_json()["type"] == "answer"
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert len(backboard.calls) == 1
@@ -258,6 +280,7 @@ def test_normal_speech_only_submits_immediately(monkeypatch):
         websocket.send_bytes(b"audio")
         assert websocket.receive_json()["type"] == "transcript"
         assert websocket.receive_json()["type"] == "answer"
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert len(backboard.calls) == 1
@@ -298,6 +321,7 @@ def test_duplicate_image_start_does_not_overwrite_upload(monkeypatch):
         websocket.send_bytes(b"audio")
         websocket.receive_json()
         websocket.receive_json()
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert response["type"] == "error"
@@ -338,7 +362,7 @@ def test_backboard_failure_sends_safe_error_and_deletes_image(monkeypatch):
         error = websocket.receive_json()
         websocket.send_text("close")
 
-    assert error == {"type": "error", "message": "Backboard failed to process the question"}
+    assert error == {"type": "error", "message": "Failed to process the question"}
     assert len(backboard.calls) == 1
     assert not backboard.calls[0]["image"].exists()
 
@@ -378,6 +402,7 @@ def test_set_thread_uses_existing_thread_id(monkeypatch):
         websocket.send_bytes(b"audio")
         websocket.receive_json()
         websocket.receive_json()
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert backboard.calls[0]["thread_id"] == "existing-id"
@@ -401,6 +426,7 @@ def test_invalid_json_control_message_keeps_connection_usable(monkeypatch):
         websocket.send_bytes(b"audio")
         assert websocket.receive_json()["type"] == "transcript"
         assert websocket.receive_json()["type"] == "answer"
+        assert_audio_frames(websocket)
         websocket.send_text("close")
 
     assert response["type"] == "error"
