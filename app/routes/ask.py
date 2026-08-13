@@ -76,15 +76,26 @@ async def ask(websocket: WebSocket):
                     "type": "answer",
                     "text": result["content"],
                     "thread_id": thread_id,
-                    "audio_format": "pcm_16000",
                 }
             )
 
             try:
                 audio_bytes = await elevenlabs_tts(result["content"])
 
+                await websocket.send_json(
+                    {
+                        "type": "audio_start",
+                        "audio_format": "pcm_16000",
+                    }
+                )
+
                 await websocket.send_bytes(audio_bytes)
 
+                await websocket.send_json(
+                    {
+                        "type": "audio_end",
+                    }
+                )
             except Exception as ex:
                 print(f"ElevenLabs TTS failed: {ex}")
 
@@ -92,8 +103,11 @@ async def ask(websocket: WebSocket):
                     {"type": "audio_error", "message": "Speech generation failed."}
                 )
 
-        except Exception:
-            await send_error("Backboard failed to process the question")
+        except Exception as ex:
+
+            print(f"Turn processing failed: {ex}")
+            await send_error("Failed to process the question")
+
         finally:
             delete_path(image_path)
             submitting = False

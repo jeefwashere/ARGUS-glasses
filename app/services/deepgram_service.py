@@ -12,6 +12,8 @@ class DeepgramSession:
     """Async wrapper around Deepgram Flux's streaming websocket."""
 
     def __init__(self, on_final_transcript: FinalTranscriptCallback):
+
+        # Callback stored
         self._on_final_transcript = on_final_transcript
         self._client: AsyncDeepgramClient | None = None
         self._connection_manager: Any | None = None
