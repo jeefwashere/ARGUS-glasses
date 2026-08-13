@@ -6,6 +6,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.services.backboard_service import call_backboard
 from app.services.deepgram_service import DeepgramSession
+from app.services.elevenlabs_service import elevenlabs_tts
 
 router = APIRouter()
 
@@ -69,9 +70,28 @@ async def ask(websocket: WebSocket):
                 thread_id=thread_id,
             )
             thread_id = result["thread_id"]
+
             await websocket.send_json(
-                {"type": "answer", "text": result["content"], "thread_id": thread_id}
+                {
+                    "type": "answer",
+                    "text": result["content"],
+                    "thread_id": thread_id,
+                    "audio_format": "pcm_16000",
+                }
             )
+
+            try:
+                audio_bytes = await elevenlabs_tts(result["content"])
+
+                await websocket.send_bytes(audio_bytes)
+
+            except Exception as ex:
+                print(f"ElevenLabs TTS failed: {ex}")
+
+                await websocket.send_json(
+                    {"type": "audio_error", "message": "Speech generation failed."}
+                )
+
         except Exception:
             await send_error("Backboard failed to process the question")
         finally:
