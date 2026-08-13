@@ -1,5 +1,4 @@
 import importlib
-from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +31,15 @@ class FakeTextToSpeech:
         return self.audio
 
 
+class FakeAsyncElevenLabs:
+    instances = []
+
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.text_to_speech = None
+        self.instances.append(self)
+
+
 @pytest.fixture
 def elevenlabs_service(monkeypatch):
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-api-key")
@@ -42,13 +50,21 @@ def elevenlabs_service(monkeypatch):
     return importlib.reload(elevenlabs_service)
 
 
+def mock_elevenlabs_client(monkeypatch, elevenlabs_service, text_to_speech):
+    FakeAsyncElevenLabs.instances = []
+
+    def create_client(api_key):
+        client = FakeAsyncElevenLabs(api_key)
+        client.text_to_speech = text_to_speech
+        return client
+
+    monkeypatch.setattr(elevenlabs_service, "AsyncElevenLabs", create_client)
+
+
 @pytest.mark.asyncio
 async def test_elevenlabs_tts_joins_audio_chunks(elevenlabs_service, monkeypatch):
-    text_to_speech = FakeTextToSpeech(
-        FakeAsyncAudio([b"abc", b"def", b"ghi"])
-    )
-    fake_client = SimpleNamespace(text_to_speech=text_to_speech)
-    monkeypatch.setattr(elevenlabs_service, "client", fake_client)
+    text_to_speech = FakeTextToSpeech(FakeAsyncAudio([b"abc", b"def", b"ghi"]))
+    mock_elevenlabs_client(monkeypatch, elevenlabs_service, text_to_speech)
 
     audio = await elevenlabs_service.elevenlabs_tts("hello")
 
@@ -60,11 +76,11 @@ async def test_elevenlabs_tts_calls_convert_with_expected_options(
     elevenlabs_service, monkeypatch
 ):
     text_to_speech = FakeTextToSpeech(FakeAsyncAudio([b"audio"]))
-    fake_client = SimpleNamespace(text_to_speech=text_to_speech)
-    monkeypatch.setattr(elevenlabs_service, "client", fake_client)
+    mock_elevenlabs_client(monkeypatch, elevenlabs_service, text_to_speech)
 
     await elevenlabs_service.elevenlabs_tts("hello")
 
+    assert FakeAsyncElevenLabs.instances[0].api_key == "test-api-key"
     assert text_to_speech.calls == [
         {
             "text": "hello",
@@ -93,8 +109,7 @@ async def test_elevenlabs_tts_propagates_audio_iterator_exception(
 ):
     expected_error = RuntimeError("tts stream failed")
     text_to_speech = FakeTextToSpeech(FakeAsyncAudio(error=expected_error))
-    fake_client = SimpleNamespace(text_to_speech=text_to_speech)
-    monkeypatch.setattr(elevenlabs_service, "client", fake_client)
+    mock_elevenlabs_client(monkeypatch, elevenlabs_service, text_to_speech)
 
     with pytest.raises(RuntimeError, match="tts stream failed"):
         await elevenlabs_service.elevenlabs_tts("hello")
