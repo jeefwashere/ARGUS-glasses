@@ -152,6 +152,17 @@ async def ask(websocket: WebSocket):
         # Gets the value of the "type" field
         message_type = message.get("type")
 
+        # Typed question from Framer
+        if message_type == "question":
+            question = (message.get("text") or "").strip()
+
+            if not question:
+                await send_error("question requires text")
+                return True
+
+            await send_transcript(question)
+            return True
+
         # If the value is close then stop or close the websocket
         if message_type == "close":
             return False
