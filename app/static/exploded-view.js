@@ -470,6 +470,11 @@ function setupScrollDriver() {
   const gsap = window.gsap;
   const ScrollTrigger = window.ScrollTrigger;
 
+  // Keep a native scroll driver active even when ScrollTrigger is available.
+  // This makes the demo work when the plugin initializes but does not emit
+  // updates (for example in some local/static-server browser configurations).
+  window.addEventListener("scroll", requestScrollUpdate, { passive: true });
+
   if (gsap && ScrollTrigger && typeof ScrollTrigger.create === "function") {
     try {
       gsap.registerPlugin(ScrollTrigger);
@@ -478,17 +483,14 @@ function setupScrollDriver() {
         start: "top top",
         end: "bottom bottom",
         invalidateOnRefresh: true,
-        onUpdate: () => applyScrollProgress(getScrollProgress()),
-        onRefresh: () => applyScrollProgress(getScrollProgress()),
+        onUpdate: requestScrollUpdate,
+        onRefresh: requestScrollUpdate,
       });
-      applyScrollProgress(scrollTriggerInstance.progress);
-      return;
     } catch (error) {
       scrollTriggerInstance = undefined;
     }
   }
 
-  window.addEventListener("scroll", requestScrollUpdate, { passive: true });
   requestScrollUpdate();
 }
 

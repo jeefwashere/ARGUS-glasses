@@ -11,8 +11,10 @@ def test_demo_serves_voice_assistant():
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "ARGUS Voice Assistant" in response.text
-    assert "Say Hi Spider, then ask" in response.text
+    assert "ARGUS Exploded Glasses Demo" in response.text
+    assert "Innovation you can" in response.text
+    assert "From perception" in response.text
+    assert "Ask what you see" in response.text
     assert "/static/app.js" in response.text
 
 

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>ARGUS Voice Assistant</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260814.5" />
+    <title>ARGUS Exploded Glasses Demo</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260815.1" />
     <script type="importmap">
       {
         "imports": {
@@ -16,6 +16,22 @@
     </script>
   </head>
   <body>
+    <a
+      class="github-link"
+      href="https://github.com/jeefwashere/cutc-2026-glasses"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="View ARGUS on GitHub"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.28-5.27-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.75 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.38-5.29 5.67.42.36.79 1.07.79 2.16v3.2c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .7Z"
+        />
+      </svg>
+      <span>GitHub</span>
+    </a>
+
     <section
       id="technology-showcase"
       class="technology-showcase"
@@ -29,8 +45,8 @@
             <span>see, hear and feel.</span>
           </h1>
           <p class="technology-lede">
-            <strong>Pushing boundaries from the inside out.</strong>
-            Spatial experiences on ARGUS are only possible through purposeful
+            <strong>Pushing boundaries from the inside out.</strong> Spatial
+            experiences on ARGUS are only possible through purposeful
             engineering. A high resolution display, immersive audio, a
             responsive dual chip design and a precise array of cameras and
             sensors work together to create an experience you have to see to
@@ -44,7 +60,7 @@
             Loading 3D model
           </div>
           <div id="exploded-fallback" class="exploded-fallback" hidden>
-            The 3D model could not be loaded. You can continue to use the ARGUS voice controls below.
+            The 3D model could not be loaded.
           </div>
         </div>
 
@@ -70,104 +86,233 @@
       </div>
     </section>
 
-    <main class="shell">
-      <section class="hero">
-        <p class="eyebrow">ARGUS VOICE ASSISTANT</p>
-        <h1>Say Hi Spider, then ask</h1>
-        <p class="lede">
-          Connect your AirPods, start listening, and begin every request with
-          Hi Spider. Speech without the wake phrase will not receive a reply.
+    <section id="infrastructure" class="infrastructure" aria-labelledby="infrastructure-heading">
+      <div class="infrastructure__header">
+        <div>
+          <p class="infrastructure__kicker">02 / PROJECT INFRASTRUCTURE</p>
+          <h2 id="infrastructure-heading">From perception<br />to intelligence.</h2>
+        </div>
+        <p class="infrastructure__lede">
+          ARGUS connects wearable hardware to a real-time multimodal AI stack.
+          One persistent channel carries camera frames, live speech, reasoning,
+          display text, and synthesized voice.
         </p>
-      </section>
+      </div>
 
-      <section class="panel controls" aria-labelledby="setup-heading">
-        <div class="section-heading">
-          <div>
-            <p class="step">STEP 1</p>
-            <h2 id="setup-heading">Choose the microphone</h2>
+      <div class="infrastructure__stats" aria-label="Infrastructure characteristics">
+        <div><strong>01</strong><span>Persistent WebSocket</span></div>
+        <div><strong>02</strong><span>Multimodal context</span></div>
+        <div><strong>03</strong><span>Conversational memory</span></div>
+        <div><strong>04</strong><span>Voice + display output</span></div>
+      </div>
+
+      <div class="system-map" aria-label="ARGUS system architecture">
+        <article class="system-node system-node--edge">
+          <div class="system-node__topline">
+            <span>EDGE / WEARABLE</span>
+            <i aria-hidden="true"></i>
           </div>
-          <span id="permission-state" class="badge">Permission needed</span>
-        </div>
-
-        <div class="field-row">
-          <label for="audio-input">Audio input</label>
-          <div class="input-actions">
-            <select id="audio-input" disabled>
-              <option value="">Grant access to load devices</option>
-            </select>
-            <button id="enable-microphone" class="secondary" type="button">
-              Enable microphone
-            </button>
-            <button id="refresh-devices" class="quiet" type="button" disabled>
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <div class="field-row compact">
-          <span>WebSocket</span>
-          <code id="websocket-url"></code>
-        </div>
-      </section>
-
-      <section class="panel session" aria-labelledby="session-heading">
-        <div class="section-heading">
-          <div>
-            <p class="step">STEP 2</p>
-            <h2 id="session-heading">Listen for Hi Spider</h2>
-          </div>
-          <span id="connection-state" class="badge">Disconnected</span>
-        </div>
-
-        <div class="session-actions">
-          <button id="start-listening" class="primary" type="button" disabled>
-            Start listening
-          </button>
-          <button id="stop-listening" class="secondary" type="button" disabled>
-            Stop listening
-          </button>
-        </div>
-
-        <div class="meter" aria-hidden="true">
-          <div id="meter-fill" class="meter-fill"></div>
-        </div>
-        <p id="status-message" class="status" role="status" aria-live="polite">
-          Connect AirPods first, then enable microphone access.
-        </p>
-      </section>
-
-      <section class="results" aria-label="Voice results">
-        <article class="panel result-card">
-          <p class="step">YOU SAID</p>
-          <p id="transcript" class="result-text muted">Waiting for speech</p>
+          <h3>ARGUS glasses</h3>
+          <p>Physical sensing and output at the point of view.</p>
+          <ul>
+            <li><span>CAM</span>Camera frame</li>
+            <li><span>MIC</span>16 kHz PCM audio</li>
+            <li><span>HUD</span>Text display</li>
+            <li><span>SPK</span>Voice playback</li>
+          </ul>
         </article>
 
-        <article class="panel result-card answer-card">
-          <p class="step">ARGUS ANSWER</p>
-          <p id="answer" class="result-text muted">Waiting for an answer</p>
-        </article>
-      </section>
+        <div class="system-link" aria-label="Secure bidirectional connection">
+          <span>IMAGE + AUDIO + JSON</span>
+          <div><i></i><b>WSS /ASK</b><i></i></div>
+          <span>TEXT + PCM RESPONSE</span>
+        </div>
 
-      <section id="error-panel" class="error-panel" hidden>
-        <strong>Something needs attention</strong>
-        <p id="error-message"></p>
+        <article class="system-node system-node--core">
+          <div class="system-node__topline">
+            <span>ORCHESTRATION / CLOUD</span>
+            <i aria-hidden="true"></i>
+          </div>
+          <h3>FastAPI core</h3>
+          <p>Coordinates each turn and maintains the live session.</p>
+          <div class="core-process">
+            <span>WebSocket gateway</span>
+            <span>Wake-word routing</span>
+            <span>Image staging</span>
+            <span>Thread state</span>
+          </div>
+          <small>DEPLOYED ON RENDER</small>
+        </article>
+
+        <div class="system-link system-link--services" aria-hidden="true">
+          <span>SERVICE REQUESTS</span>
+          <div><i></i><b>ASYNC</b><i></i></div>
+          <span>STREAMED RESULTS</span>
+        </div>
+
+        <div class="service-stack">
+          <article class="service-card">
+            <div><span>STT</span><i aria-hidden="true"></i></div>
+            <h3>Deepgram</h3>
+            <p>Live speech recognition and end-of-turn detection.</p>
+          </article>
+          <article class="service-card">
+            <div><span>AI</span><i aria-hidden="true"></i></div>
+            <h3>Backboard</h3>
+            <p>Multimodal reasoning with persistent conversation threads.</p>
+          </article>
+          <article class="service-card">
+            <div><span>TTS</span><i aria-hidden="true"></i></div>
+            <h3>ElevenLabs</h3>
+            <p>Natural speech synthesized and returned as PCM audio.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="request-flow" aria-label="Request lifecycle">
+        <p>LIVE REQUEST LIFECYCLE</p>
+        <ol>
+          <li><span>01</span><strong>Capture</strong><small>Voice + optional image</small></li>
+          <li><span>02</span><strong>Transcribe</strong><small>Speech becomes intent</small></li>
+          <li><span>03</span><strong>Reason</strong><small>Context enters the thread</small></li>
+          <li><span>04</span><strong>Synthesize</strong><small>Answer becomes voice</small></li>
+          <li><span>05</span><strong>Respond</strong><small>Display + speaker output</small></li>
+        </ol>
+      </div>
+    </section>
+
+    <main id="interactive-demo" class="argus-demo">
+      <header class="argus-demo__intro">
+        <p class="demo-kicker">ARGUS / LIVE SYSTEM</p>
+        <h2>Ask what you see.</h2>
+        <p>
+          Use the same multimodal pipeline as the glasses: attach a camera
+          frame, type a question or speak with the “Hi Spider” wake phrase,
+          then hear and read ARGUS&rsquo;s response.
+        </p>
+      </header>
+
+      <section class="demo-console" aria-labelledby="demo-console-heading">
+        <div class="demo-console__bar">
+          <div>
+            <span class="demo-console__signal" aria-hidden="true"></span>
+            <span id="connection-state">Disconnected</span>
+          </div>
+          <label class="endpoint-field" for="ask-endpoint">
+            <span>ASK ENDPOINT</span>
+            <input
+              id="ask-endpoint"
+              value="wss://cutc-2026-glasses.onrender.com/ask"
+              spellcheck="false"
+            />
+          </label>
+          <button id="connect-argus" class="console-button console-button--quiet" type="button">
+            Connect
+          </button>
+        </div>
+
+        <div class="demo-console__grid">
+          <div class="demo-inputs">
+            <section class="camera-input" aria-labelledby="camera-heading">
+              <div class="console-heading">
+                <div>
+                  <p>01 / CAMERA</p>
+                  <h3 id="camera-heading">Give ARGUS vision</h3>
+                </div>
+                <button id="clear-image" class="text-button" type="button" hidden>Remove</button>
+              </div>
+              <label id="image-drop-zone" class="image-drop-zone" for="image-input">
+                <img id="image-preview" alt="Selected camera frame" hidden />
+                <span id="image-placeholder">
+                  <strong>Drop a frame here</strong>
+                  <small>or choose/capture a JPEG, PNG, or WebP image</small>
+                </span>
+                <input
+                  id="image-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                />
+              </label>
+            </section>
+
+            <section class="voice-input" aria-labelledby="voice-heading">
+              <div class="console-heading">
+                <div>
+                  <p>02 / VOICE</p>
+                  <h3 id="voice-heading">Speak naturally</h3>
+                </div>
+                <span id="microphone-state" class="microphone-state">Permission needed</span>
+              </div>
+              <div class="microphone-controls">
+                <select id="audio-input" aria-label="Microphone input" disabled>
+                  <option value="">Enable microphone to load devices</option>
+                </select>
+                <button id="enable-microphone" class="console-button console-button--quiet" type="button">
+                  Enable mic
+                </button>
+                <button id="toggle-listening" class="console-button console-button--voice" type="button" disabled>
+                  <span aria-hidden="true">●</span> Start listening
+                </button>
+              </div>
+              <div class="voice-meter" aria-hidden="true"><span id="voice-meter-fill"></span></div>
+              <p class="voice-hint">Say “Hi Spider,” ask your question, then pause.</p>
+            </section>
+
+            <form id="question-form" class="question-input">
+              <label for="question-text">03 / TEXT PROMPT</label>
+              <div>
+                <textarea
+                  id="question-text"
+                  rows="2"
+                  placeholder="What am I looking at?"
+                  required
+                ></textarea>
+                <button id="send-question" class="console-button console-button--send" type="submit">
+                  Ask ARGUS <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+              <div class="prompt-suggestions" aria-label="Example prompts">
+                <button type="button" data-prompt="What am I looking at?">Identify scene</button>
+                <button type="button" data-prompt="Read and summarize the text in this image.">Read text</button>
+                <button type="button" data-prompt="Translate the visible text into English.">Translate</button>
+              </div>
+            </form>
+          </div>
+
+          <aside class="argus-output" aria-live="polite">
+            <div class="argus-output__display">
+              <div class="hud-corners" aria-hidden="true"></div>
+              <div class="argus-output__status">
+                <span>ARGUS DISPLAY</span>
+                <span id="inference-state">STANDBY</span>
+              </div>
+              <div class="argus-output__reticle" aria-hidden="true"><span></span></div>
+              <div class="result-block">
+                <p>YOU SAID</p>
+                <div id="transcript">Waiting for a prompt.</div>
+              </div>
+              <div class="result-block result-block--answer">
+                <p>ARGUS RESPONSE</p>
+                <div id="answer">Connect to begin a live session.</div>
+              </div>
+              <div class="audio-state">
+                <span id="audio-indicator" aria-hidden="true"></span>
+                <span id="audio-state">Voice response ready</span>
+              </div>
+            </div>
+            <p id="demo-status" class="demo-status" role="status">
+              Start the FastAPI backend, then connect to the ask endpoint.
+            </p>
+            <div id="demo-error" class="demo-error" role="alert" hidden></div>
+          </aside>
+        </div>
       </section>
     </main>
 
-    <script src="/static/vendor/gsap/gsap.min.js?v=20260814.3"></script>
-    <script src="/static/vendor/gsap/ScrollTrigger.min.js?v=20260814.3"></script>
-    <script type="module">
-      import("/static/exploded-view.js?v=20260815.2").catch(() => {
-        const status = document.querySelector("#exploded-status");
-        const fallback = document.querySelector("#exploded-fallback");
-        if (status) {
-          status.hidden = true;
-        }
-        if (fallback) {
-          fallback.hidden = false;
-        }
-      });
-    </script>
-    <script type="module" src="/static/app.js"></script>
+    <script src="/static/vendor/gsap/gsap.min.js"></script>
+    <script src="/static/vendor/gsap/ScrollTrigger.min.js"></script>
+    <script type="module" src="/static/exploded-view.js?v=20260815.1"></script>
+    <script type="module" src="/static/app.js?v=20260815.1"></script>
   </body>
 </html>
