@@ -1,0 +1,140 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #11110f;
+  background: #f4f1ea;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  --page-pad: clamp(1rem, 3vw, 3rem);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: #f4f1ea;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+  background:
+    linear-gradient(90deg, rgba(17, 17, 15, 0.045) 1px, transparent 1px) 0 0 / 25vw 100%,
+    #f4f1ea;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: #11110f;
+  color: #f4f1ea;
+}
+
+.page-shell {
+  min-height: 100vh;
+}
+
+.section-pad {
+  padding: clamp(5rem, 12vw, 11rem) var(--page-pad);
+}
+
+.hairline {
+  border-color: rgba(17, 17, 15, 0.15);
+}
+
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.display-type {
+  font-size: clamp(3.3rem, 12vw, 13.5rem);
+  line-height: 0.86;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.headline-type {
+  font-size: clamp(2.6rem, 7vw, 8.5rem);
+  line-height: 0.92;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.mid-type {
+  font-size: clamp(2rem, 4vw, 5rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+  font-weight: 850;
+}
+
+.industrial-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  border: 1px solid rgba(17, 17, 15, 0.75);
+  padding: 0 1rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.industrial-button:hover {
+  transform: translateY(-1px);
+}
+
+.industrial-button[data-variant="dark"] {
+  background: #11110f;
+  color: #f4f1ea;
+}
+
+.industrial-button[data-variant="light"] {
+  background: rgba(244, 241, 234, 0.8);
+  color: #11110f;
+}
+
+.image-placeholder {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(17, 17, 15, 0.15);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(207, 220, 213, 0.38)),
+    repeating-linear-gradient(90deg, rgba(17, 17, 15, 0.06) 0 1px, transparent 1px 18px);
+}
+
+.image-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 1px solid rgba(17, 17, 15, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
