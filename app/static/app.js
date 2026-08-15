@@ -247,6 +247,25 @@ async function handleSocketMessage(event) {
     return;
   }
 
+  if (message.type === "camera_frame") {
+    if (!message.image_data_url?.startsWith("data:image/")) {
+      throw new Error("ARGUS returned an invalid camera frame.");
+    }
+    console.log("[CAMERA] Captured frame received");
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    imagePreviewUrl = "";
+    selectedImage = null;
+    imageUploaded = false;
+    elements.imagePreview.src = message.image_data_url;
+    elements.imagePreview.hidden = false;
+    elements.imagePlaceholder.hidden = true;
+    elements.clearImage.hidden = false;
+    elements.imageDropZone.classList.add("has-image");
+    setInference("seeing");
+    setStatus("Captured camera frame received. ARGUS is analyzing it.");
+    return;
+  }
+
   if (message.type === "wake_detected") {
     elements.transcript.textContent = message.text || "Hi Spider";
     setInference("listening");
@@ -279,7 +298,7 @@ async function handleSocketMessage(event) {
       threadId = message.thread_id;
       sessionStorage.setItem("argus-thread-id", threadId);
     }
-    clearImageSelection();
+    if (selectedImage) clearImageSelection();
     return;
   }
 

@@ -51,3 +51,13 @@ def test_demo_client_plays_base64_wav_in_browser():
     assert "window.atob(audioBase64)" in app_js
     assert "context.decodeAudioData(wavBytes.buffer)" in app_js
     assert "source.connect(context.destination)" in app_js
+
+
+def test_demo_client_displays_backend_camera_frame_without_direct_capture():
+    app_js = client.get("/static/app.js").text
+
+    assert 'message.type === "camera_frame"' in app_js
+    assert "message.image_data_url" in app_js
+    assert "elements.imagePreview.src = message.image_data_url" in app_js
+    assert 'console.log("[CAMERA] Captured frame received")' in app_js
+    assert '"/capture"' not in app_js

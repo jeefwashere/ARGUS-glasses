@@ -147,6 +147,26 @@ async def ask(websocket: WebSocket):
                         device_id=configured_device_id(),
                         timeout=IMAGE_TIMEOUT_SECONDS,
                     )
+                    image_bytes = image_path.read_bytes()
+                    content_type = {
+                        ".jpg": "image/jpeg",
+                        ".png": "image/png",
+                        ".webp": "image/webp",
+                    }.get(image_path.suffix.lower(), "image/jpeg")
+                    image_base64 = base64.b64encode(image_bytes).decode("ascii")
+                    logger.info(
+                        "[CAMERA] Sending captured frame to browser bytes=%s",
+                        len(image_bytes),
+                    )
+                    await send_json(
+                        {
+                            "type": "camera_frame",
+                            "content_type": content_type,
+                            "image_data_url": (
+                                f"data:{content_type};base64,{image_base64}"
+                            ),
+                        }
+                    )
                     logger.info(
                         "[BACKBOARD] Sending original question + captured image"
                     )

@@ -167,6 +167,13 @@ def test_visual_question_uses_device_not_browser(monkeypatch):
                     json.dumps({"type": "image_end", "request_id": request_id})
                 )
                 assert device.receive_json()["type"] == "image_received"
+                camera_frame = browser.receive_json()
+                assert camera_frame["type"] == "camera_frame"
+                assert camera_frame["content_type"] == "image/jpeg"
+                assert camera_frame["image_data_url"] == (
+                    "data:image/jpeg;base64,"
+                    + base64.b64encode(jpeg_bytes).decode("ascii")
+                )
                 assert browser.receive_json()["type"] == "answer"
                 assert_browser_audio(browser)
                 browser.send_text("close")
