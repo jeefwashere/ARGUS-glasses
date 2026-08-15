@@ -283,6 +283,35 @@ async function handleSocketMessage(event) {
     return;
   }
 
+  if (message.type === "audio") {
+    if (message.audio_mime_type !== "audio/wav" || !message.audio_base64) {
+      throw new Error("ARGUS returned unsupported browser audio.");
+    }
+
+    receivingTtsAudio = true;
+    elements.audioIndicator.classList.add("is-playing");
+    elements.audioState.textContent = "Speaking response";
+    setInference("speaking");
+
+    try {
+      await playBase64Wav(message.audio_base64);
+    } catch (error) {
+      receivingTtsAudio = false;
+      elements.audioIndicator.classList.remove("is-playing");
+      elements.audioState.textContent = "Text response only";
+      throw error;
+    }
+
+    receivingTtsAudio = false;
+    const remainingMs = Math.max(0, (nextPlaybackTime - (playbackContext?.currentTime || 0)) * 1000);
+    window.setTimeout(() => {
+      elements.audioIndicator.classList.remove("is-playing");
+      elements.audioState.textContent = "Voice response complete";
+      setInference("ready");
+    }, remainingMs);
+    return;
+  }
+
   if (message.type === "audio_start") {
     responseAudioFormat = message.audio_format || null;
     receivingTtsAudio =
@@ -349,6 +378,23 @@ async function playPcm16(arrayBuffer) {
   for (let index = 0; index < sampleCount; index += 1) {
     channel[index] = view.getInt16(index * 2, true) / 0x8000;
   }
+  const source = context.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(context.destination);
+  const startAt = Math.max(context.currentTime, nextPlaybackTime);
+  source.start(startAt);
+  nextPlaybackTime = startAt + audioBuffer.duration;
+}
+
+async function playBase64Wav(audioBase64) {
+  const binary = window.atob(audioBase64);
+  const wavBytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    wavBytes[index] = binary.charCodeAt(index);
+  }
+
+  const context = await ensurePlaybackContext();
+  const audioBuffer = await context.decodeAudioData(wavBytes.buffer);
   const source = context.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(context.destination);

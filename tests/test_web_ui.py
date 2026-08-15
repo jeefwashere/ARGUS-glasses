@@ -40,3 +40,14 @@ def test_demo_client_forwards_wav_and_display_to_esp32():
     assert '"audio/wav"' in app_js
     assert 'responseAudioFormat === "wav_44100_stereo"' in app_js
     assert "expectingEsp32Audio = false" in app_js
+
+
+def test_demo_client_plays_base64_wav_in_browser():
+    app_js = client.get("/static/app.js").text
+
+    assert 'message.type === "audio"' in app_js
+    assert "message.audio_base64" in app_js
+    assert 'message.audio_mime_type !== "audio/wav"' in app_js
+    assert "window.atob(audioBase64)" in app_js
+    assert "context.decodeAudioData(wavBytes.buffer)" in app_js
+    assert "source.connect(context.destination)" in app_js
