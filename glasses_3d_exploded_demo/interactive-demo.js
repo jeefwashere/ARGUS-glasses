@@ -25,6 +25,10 @@ const elements = {
   promptSuggestions: document.querySelectorAll("[data-prompt]"),
 };
 
+const ESP32_BASE_URL = (globalThis.ARGUS_ESP32_BASE_URL || "http://10.0.0.97").replace(/\/$/, "");
+const ESP32_DISPLAY_TIMEOUT_MS = 10000;
+const ESP32_AUDIO_TIMEOUT_MS = 120000;
+
 let socket = null;
 let socketPromise = null;
 let selectedImage = null;
@@ -37,6 +41,8 @@ let workletNode = null;
 let silentGain = null;
 let isRecording = false;
 let receivingTtsAudio = false;
+let responseAudioFormat = null;
+let expectingEsp32Audio = false;
 let playbackContext = null;
 let nextPlaybackTime = 0;
 let threadId = sessionStorage.getItem("argus-thread-id");
@@ -59,6 +65,51 @@ function showError(message) {
 function clearError() {
   elements.error.hidden = true;
   elements.error.textContent = "";
+}
+
+async function postToEsp32(path, body, contentType, timeoutMs, failureMessage) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${ESP32_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.error(`${failureMessage}: HTTP ${response.status}${responseBody ? ` — ${responseBody}` : ""}`);
+    }
+  } catch (error) {
+    const detail = error?.name === "AbortError" ? "request timed out" : error?.message || String(error);
+    console.error(`${failureMessage}: ${detail}`);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function forwardDisplayToEsp32(answerText) {
+  if (!answerText) return Promise.resolve();
+  return postToEsp32(
+    "/display",
+    answerText,
+    "text/plain; charset=utf-8",
+    ESP32_DISPLAY_TIMEOUT_MS,
+    "Failed to send display text to ESP32",
+  );
+}
+
+function forwardAudioToEsp32(wavBytes) {
+  return postToEsp32(
+    "/audio",
+    wavBytes,
+    "audio/wav",
+    ESP32_AUDIO_TIMEOUT_MS,
+    "Failed to send audio to ESP32",
+  );
 }
 
 function updateConnection(label, live = false) {
@@ -142,6 +193,8 @@ function connectWebSocket() {
       if (socket === candidate) socket = null;
       socketPromise = null;
       receivingTtsAudio = false;
+      responseAudioFormat = null;
+      expectingEsp32Audio = false;
       updateConnection("Disconnected");
       setInference("offline");
       if (isRecording) void stopListening("Listening stopped because the backend disconnected.");
@@ -165,7 +218,11 @@ async function disconnectWebSocket() {
 
 async function handleSocketMessage(event) {
   if (typeof event.data !== "string") {
-    if (receivingTtsAudio && event.data instanceof ArrayBuffer) {
+    if (expectingEsp32Audio && event.data instanceof ArrayBuffer) {
+      expectingEsp32Audio = false;
+      void forwardAudioToEsp32(event.data);
+    }
+    if (responseAudioFormat === "pcm_16000" && event.data instanceof ArrayBuffer) {
       await playPcm16(event.data);
     }
     return;
@@ -214,6 +271,7 @@ async function handleSocketMessage(event) {
 
   if (message.type === "answer") {
     elements.answer.textContent = message.text || "No answer was returned.";
+    void forwardDisplayToEsp32(message.text);
     elements.sendQuestion.disabled = false;
     setInference("answer");
     setStatus("Answer received. ARGUS is preparing the voice response.");
@@ -226,7 +284,9 @@ async function handleSocketMessage(event) {
   }
 
   if (message.type === "audio_start") {
-    receivingTtsAudio = message.audio_format === "pcm_16000";
+    responseAudioFormat = message.audio_format || null;
+    receivingTtsAudio = responseAudioFormat === "pcm_16000" || responseAudioFormat === "wav_16000_mono";
+    expectingEsp32Audio = responseAudioFormat === "wav_16000_mono";
     if (!receivingTtsAudio) {
       throw new Error(`Unsupported response audio format: ${message.audio_format || "unknown"}.`);
     }
@@ -238,6 +298,8 @@ async function handleSocketMessage(event) {
 
   if (message.type === "audio_end") {
     receivingTtsAudio = false;
+    responseAudioFormat = null;
+    expectingEsp32Audio = false;
     const remainingMs = Math.max(0, (nextPlaybackTime - (playbackContext?.currentTime || 0)) * 1000);
     window.setTimeout(() => {
       elements.audioIndicator.classList.remove("is-playing");
@@ -249,6 +311,8 @@ async function handleSocketMessage(event) {
 
   if (message.type === "audio_error") {
     receivingTtsAudio = false;
+    responseAudioFormat = null;
+    expectingEsp32Audio = false;
     elements.audioIndicator.classList.remove("is-playing");
     elements.audioState.textContent = "Text response only";
     showError(message.message || "Speech generation failed.");
@@ -256,6 +320,7 @@ async function handleSocketMessage(event) {
   }
 
   if (message.type === "error") {
+    expectingEsp32Audio = false;
     elements.sendQuestion.disabled = false;
     showError(message.message || "The backend reported an error.");
   }

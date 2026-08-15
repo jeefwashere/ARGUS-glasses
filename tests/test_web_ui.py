@@ -26,3 +26,15 @@ def test_demo_static_assets_are_available():
     assert worklet_js.status_code == 200
     assert 'registerProcessor("pcm16-downsampler"' in worklet_js.text
     assert stylesheet.status_code == 200
+
+
+def test_demo_client_forwards_wav_and_display_to_esp32():
+    app_js = client.get("/static/app.js").text
+
+    assert 'globalThis.ARGUS_ESP32_BASE_URL || "http://10.0.0.97"' in app_js
+    assert '"/display"' in app_js
+    assert '"text/plain; charset=utf-8"' in app_js
+    assert '"/audio"' in app_js
+    assert '"audio/wav"' in app_js
+    assert 'responseAudioFormat === "wav_16000_mono"' in app_js
+    assert "expectingEsp32Audio = false" in app_js

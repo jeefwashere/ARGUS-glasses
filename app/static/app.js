@@ -17,6 +17,9 @@ const elements = {
 
 const websocketProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const websocketUrl = `${websocketProtocol}//${window.location.host}/ask`;
+const ESP32_BASE_URL = (globalThis.ARGUS_ESP32_BASE_URL || "http://10.0.0.97").replace(/\/$/, "");
+const ESP32_DISPLAY_TIMEOUT_MS = 10000;
+const ESP32_AUDIO_TIMEOUT_MS = 120000;
 elements.websocketUrl.textContent = websocketUrl;
 
 let socket = null;
@@ -29,6 +32,8 @@ let workletNode = null;
 let silentGain = null;
 let isRecording = false;
 let receivingTtsAudio = false;
+let responseAudioFormat = null;
+let expectingEsp32Audio = false;
 let nextPlaybackTime = 0;
 
 function setStatus(message) {
@@ -43,6 +48,51 @@ function showError(message) {
 function clearError() {
   elements.errorPanel.hidden = true;
   elements.errorMessage.textContent = "";
+}
+
+async function postToEsp32(path, body, contentType, timeoutMs, failureMessage) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${ESP32_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.error(`${failureMessage}: HTTP ${response.status}${responseBody ? ` — ${responseBody}` : ""}`);
+    }
+  } catch (error) {
+    const detail = error?.name === "AbortError" ? "request timed out" : error?.message || String(error);
+    console.error(`${failureMessage}: ${detail}`);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function forwardDisplayToEsp32(answerText) {
+  if (!answerText) return Promise.resolve();
+  return postToEsp32(
+    "/display",
+    answerText,
+    "text/plain; charset=utf-8",
+    ESP32_DISPLAY_TIMEOUT_MS,
+    "Failed to send display text to ESP32",
+  );
+}
+
+function forwardAudioToEsp32(wavBytes) {
+  return postToEsp32(
+    "/audio",
+    wavBytes,
+    "text/plain",
+    ESP32_AUDIO_TIMEOUT_MS,
+    "Failed to send audio to ESP32",
+  );
 }
 
 function setTextResult(element, text) {
@@ -176,6 +226,8 @@ function connectWebSocket() {
       }
       socketPromise = null;
       receivingTtsAudio = false;
+      responseAudioFormat = null;
+      expectingEsp32Audio = false;
       updateSocketState("Disconnected");
 
       if (isRecording) {
@@ -189,7 +241,11 @@ function connectWebSocket() {
 
 async function handleSocketMessage(event) {
   if (typeof event.data !== "string") {
-    if (receivingTtsAudio && event.data instanceof ArrayBuffer) {
+    if (expectingEsp32Audio && event.data instanceof ArrayBuffer) {
+      expectingEsp32Audio = false;
+      void forwardAudioToEsp32(event.data);
+    }
+    if (responseAudioFormat === "pcm_16000" && event.data instanceof ArrayBuffer) {
       await playPcm16(event.data);
     }
     return;
@@ -223,12 +279,15 @@ async function handleSocketMessage(event) {
 
   if (message.type === "answer") {
     setTextResult(elements.answer, message.text || "");
+    void forwardDisplayToEsp32(message.text);
     setStatus("Answer received. You can continue with another question.");
     return;
   }
 
   if (message.type === "audio_start") {
-    receivingTtsAudio = message.audio_format === "pcm_16000";
+    responseAudioFormat = message.audio_format || null;
+    receivingTtsAudio = responseAudioFormat === "pcm_16000" || responseAudioFormat === "wav_16000_mono";
+    expectingEsp32Audio = responseAudioFormat === "wav_16000_mono";
     if (!receivingTtsAudio) {
       showError(`Unsupported response audio format: ${message.audio_format || "unknown"}`);
     }
@@ -237,11 +296,15 @@ async function handleSocketMessage(event) {
 
   if (message.type === "audio_end") {
     receivingTtsAudio = false;
+    responseAudioFormat = null;
+    expectingEsp32Audio = false;
     return;
   }
 
   if (message.type === "audio_error" || message.type === "error") {
     receivingTtsAudio = false;
+    responseAudioFormat = null;
+    expectingEsp32Audio = false;
     showError(message.message || "The backend reported an error.");
   }
 }
@@ -297,8 +360,8 @@ function selectedDeviceConstraints() {
 function responseAudioIsPlaying() {
   return Boolean(
     playbackContext &&
-      playbackContext.state !== "closed" &&
-      playbackContext.currentTime < nextPlaybackTime + 0.1,
+    playbackContext.state !== "closed" &&
+    playbackContext.currentTime < nextPlaybackTime + 0.1,
   );
 }
 

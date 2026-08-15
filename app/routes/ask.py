@@ -9,6 +9,7 @@ from app.services.backboard_service import call_backboard
 from app.services.deepgram_service import DeepgramSession
 from app.services.elevenlabs_service import elevenlabs_tts
 from app.utils.wake_word import WAKE_PHRASE, extract_wake_question
+from app.utils.audio import pcm16_to_wav
 
 router = APIRouter()
 
@@ -85,22 +86,17 @@ async def ask(websocket: WebSocket):
             )
 
             try:
-                audio_bytes = await elevenlabs_tts(result["content"])
+                pcm_audio = await elevenlabs_tts(result["content"])
+                wav_audio = pcm16_to_wav(pcm_audio)
 
                 await websocket.send_json(
                     {
                         "type": "audio_start",
-                        "audio_format": "pcm_16000",
+                        "audio_format": "wav_16000_mono",
                     }
                 )
 
-                await websocket.send_bytes(audio_bytes)
-
-                await websocket.send_json(
-                    {
-                        "type": "audio_end",
-                    }
-                )
+                await websocket.send_bytes(wav_audio)
             except Exception as ex:
                 print(f"ElevenLabs TTS failed: {ex}")
 
