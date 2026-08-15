@@ -16,6 +16,22 @@
     </script>
   </head>
   <body>
+    <a
+      class="github-link"
+      href="https://github.com/jeefwashere/cutc-2026-glasses"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="View ARGUS on GitHub"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.28-5.27-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.75 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.38-5.29 5.67.42.36.79 1.07.79 2.16v3.2c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .7Z"
+        />
+      </svg>
+      <span>GitHub</span>
+    </a>
+
     <section
       id="technology-showcase"
       class="technology-showcase"
@@ -70,6 +86,101 @@
       </div>
     </section>
 
+    <section id="infrastructure" class="infrastructure" aria-labelledby="infrastructure-heading">
+      <div class="infrastructure__header">
+        <div>
+          <p class="infrastructure__kicker">02 / PROJECT INFRASTRUCTURE</p>
+          <h2 id="infrastructure-heading">From perception<br />to intelligence.</h2>
+        </div>
+        <p class="infrastructure__lede">
+          ARGUS connects wearable hardware to a real-time multimodal AI stack.
+          One persistent channel carries camera frames, live speech, reasoning,
+          display text, and synthesized voice.
+        </p>
+      </div>
+
+      <div class="infrastructure__stats" aria-label="Infrastructure characteristics">
+        <div><strong>01</strong><span>Persistent WebSocket</span></div>
+        <div><strong>02</strong><span>Multimodal context</span></div>
+        <div><strong>03</strong><span>Conversational memory</span></div>
+        <div><strong>04</strong><span>Voice + display output</span></div>
+      </div>
+
+      <div class="system-map" aria-label="ARGUS system architecture">
+        <article class="system-node system-node--edge">
+          <div class="system-node__topline">
+            <span>EDGE / WEARABLE</span>
+            <i aria-hidden="true"></i>
+          </div>
+          <h3>ARGUS glasses</h3>
+          <p>Physical sensing and output at the point of view.</p>
+          <ul>
+            <li><span>CAM</span>Camera frame</li>
+            <li><span>MIC</span>16 kHz PCM audio</li>
+            <li><span>HUD</span>Text display</li>
+            <li><span>SPK</span>Voice playback</li>
+          </ul>
+        </article>
+
+        <div class="system-link" aria-label="Secure bidirectional connection">
+          <span>IMAGE + AUDIO + JSON</span>
+          <div><i></i><b>WSS /ASK</b><i></i></div>
+          <span>TEXT + PCM RESPONSE</span>
+        </div>
+
+        <article class="system-node system-node--core">
+          <div class="system-node__topline">
+            <span>ORCHESTRATION / CLOUD</span>
+            <i aria-hidden="true"></i>
+          </div>
+          <h3>FastAPI core</h3>
+          <p>Coordinates each turn and maintains the live session.</p>
+          <div class="core-process">
+            <span>WebSocket gateway</span>
+            <span>Wake-word routing</span>
+            <span>Image staging</span>
+            <span>Thread state</span>
+          </div>
+          <small>DEPLOYED ON RENDER</small>
+        </article>
+
+        <div class="system-link system-link--services" aria-hidden="true">
+          <span>SERVICE REQUESTS</span>
+          <div><i></i><b>ASYNC</b><i></i></div>
+          <span>STREAMED RESULTS</span>
+        </div>
+
+        <div class="service-stack">
+          <article class="service-card">
+            <div><span>STT</span><i aria-hidden="true"></i></div>
+            <h3>Deepgram</h3>
+            <p>Live speech recognition and end-of-turn detection.</p>
+          </article>
+          <article class="service-card">
+            <div><span>AI</span><i aria-hidden="true"></i></div>
+            <h3>Backboard</h3>
+            <p>Multimodal reasoning with persistent conversation threads.</p>
+          </article>
+          <article class="service-card">
+            <div><span>TTS</span><i aria-hidden="true"></i></div>
+            <h3>ElevenLabs</h3>
+            <p>Natural speech synthesized and returned as PCM audio.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="request-flow" aria-label="Request lifecycle">
+        <p>LIVE REQUEST LIFECYCLE</p>
+        <ol>
+          <li><span>01</span><strong>Capture</strong><small>Voice + optional image</small></li>
+          <li><span>02</span><strong>Transcribe</strong><small>Speech becomes intent</small></li>
+          <li><span>03</span><strong>Reason</strong><small>Context enters the thread</small></li>
+          <li><span>04</span><strong>Synthesize</strong><small>Answer becomes voice</small></li>
+          <li><span>05</span><strong>Respond</strong><small>Display + speaker output</small></li>
+        </ol>
+      </div>
+    </section>
+
     <main id="interactive-demo" class="argus-demo">
       <header class="argus-demo__intro">
         <p class="demo-kicker">ARGUS / LIVE SYSTEM</p>
@@ -91,7 +202,7 @@
             <span>ASK ENDPOINT</span>
             <input
               id="ask-endpoint"
-              value="wss://cutc-2026-glasses.onrender.com/ws/ask"
+              value="wss://cutc-2026-glasses.onrender.com/ask"
               spellcheck="false"
             />
           </label>
