@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>ARGUS Voice Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260814.5" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/static/vendor/three/three.module.js",
+          "three/addons/": "/static/vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <section
+      id="technology-showcase"
+      class="technology-showcase"
+      aria-labelledby="technology-heading"
+    >
+      <div class="technology-stage">
+        <div class="technology-copy">
+          <p class="technology-kicker">Technology</p>
+          <h1 id="technology-heading">
+            <span>Innovation you can</span>
+            <span>see, hear and feel.</span>
+          </h1>
+          <p class="technology-lede">
+            <strong>Pushing boundaries from the inside out.</strong>
+            Spatial experiences on ARGUS are only possible through purposeful
+            engineering. A high resolution display, immersive audio, a
+            responsive dual chip design and a precise array of cameras and
+            sensors work together to create an experience you have to see to
+            believe.
+          </p>
+        </div>
+
+        <div class="technology-model" aria-label="Interactive exploded glasses model">
+          <canvas id="exploded-canvas" aria-hidden="true"></canvas>
+          <div id="exploded-status" class="exploded-status" role="status" aria-live="polite">
+            Loading 3D model
+          </div>
+          <div id="exploded-fallback" class="exploded-fallback" hidden>
+            The 3D model could not be loaded. You can continue to use the ARGUS voice controls below.
+          </div>
+        </div>
+
+        <div class="technology-scroll-note" aria-hidden="true">
+          <span class="technology-scroll-line"></span>
+          <span>Scroll to explore</span>
+        </div>
+        <div class="technology-progress" aria-hidden="true">
+          <span id="technology-progress-bar"></span>
+        </div>
+
+        <div class="technology-stage-indicator" aria-live="polite">
+          <p id="technology-stage-label">Complete glasses</p>
+          <div class="technology-stage-dots" role="list" aria-label="Exploded view stages">
+            <span data-stage-dot role="listitem" aria-current="step"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">ARGUS VOICE ASSISTANT</p>
+        <h1>Say Hi Spider, then ask</h1>
+        <p class="lede">
+          Connect your AirPods, start listening, and begin every request with
+          Hi Spider. Speech without the wake phrase will not receive a reply.
+        </p>
+      </section>
+
+      <section class="panel controls" aria-labelledby="setup-heading">
+        <div class="section-heading">
+          <div>
+            <p class="step">STEP 1</p>
+            <h2 id="setup-heading">Choose the microphone</h2>
+          </div>
+          <span id="permission-state" class="badge">Permission needed</span>
+        </div>
+
+        <div class="field-row">
+          <label for="audio-input">Audio input</label>
+          <div class="input-actions">
+            <select id="audio-input" disabled>
+              <option value="">Grant access to load devices</option>
+            </select>
+            <button id="enable-microphone" class="secondary" type="button">
+              Enable microphone
+            </button>
+            <button id="refresh-devices" class="quiet" type="button" disabled>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="field-row compact">
+          <span>WebSocket</span>
+          <code id="websocket-url"></code>
+        </div>
+      </section>
+
+      <section class="panel session" aria-labelledby="session-heading">
+        <div class="section-heading">
+          <div>
+            <p class="step">STEP 2</p>
+            <h2 id="session-heading">Listen for Hi Spider</h2>
+          </div>
+          <span id="connection-state" class="badge">Disconnected</span>
+        </div>
+
+        <div class="session-actions">
+          <button id="start-listening" class="primary" type="button" disabled>
+            Start listening
+          </button>
+          <button id="stop-listening" class="secondary" type="button" disabled>
+            Stop listening
+          </button>
+        </div>
+
+        <div class="meter" aria-hidden="true">
+          <div id="meter-fill" class="meter-fill"></div>
+        </div>
+        <p id="status-message" class="status" role="status" aria-live="polite">
+          Connect AirPods first, then enable microphone access.
+        </p>
+      </section>
+
+      <section class="results" aria-label="Voice results">
+        <article class="panel result-card">
+          <p class="step">YOU SAID</p>
+          <p id="transcript" class="result-text muted">Waiting for speech</p>
+        </article>
+
+        <article class="panel result-card answer-card">
+          <p class="step">ARGUS ANSWER</p>
+          <p id="answer" class="result-text muted">Waiting for an answer</p>
+        </article>
+      </section>
+
+      <section id="error-panel" class="error-panel" hidden>
+        <strong>Something needs attention</strong>
+        <p id="error-message"></p>
+      </section>
+    </main>
+
+    <script src="/static/vendor/gsap/gsap.min.js?v=20260814.3"></script>
+    <script src="/static/vendor/gsap/ScrollTrigger.min.js?v=20260814.3"></script>
+    <script type="module">
+      import("/static/exploded-view.js?v=20260815.2").catch(() => {
+        const status = document.querySelector("#exploded-status");
+        const fallback = document.querySelector("#exploded-fallback");
+        if (status) {
+          status.hidden = true;
+        }
+        if (fallback) {
+          fallback.hidden = false;
+        }
+      });
+    </script>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

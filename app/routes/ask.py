@@ -1,5 +1,6 @@
 import json
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -7,6 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.backboard_service import call_backboard
 from app.services.deepgram_service import DeepgramSession
 from app.services.elevenlabs_service import elevenlabs_tts
+from app.utils.wake_word import WAKE_PHRASE, extract_wake_question
 
 router = APIRouter()
 
@@ -15,6 +17,8 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+
+WAKE_WINDOW_SECONDS = 10
 
 
 @router.websocket("/ask")
@@ -32,6 +36,7 @@ async def ask(websocket: WebSocket):
     receiving_image = False
     image_expected = False
     submitting = False
+    wake_armed_until = 0.0
 
     async def send_error(message: str) -> None:
         await websocket.send_json({"type": "error", "message": message})
@@ -119,6 +124,45 @@ async def ask(websocket: WebSocket):
         pending_transcript = text
         await websocket.send_json({"type": "transcript", "text": text})
         await submit_pending_turn()
+
+    async def handle_voice_transcript(text: str) -> None:
+        nonlocal wake_armed_until
+
+        spoken_text = text.strip()
+        if not spoken_text:
+            return
+
+        wake_detected, question = extract_wake_question(spoken_text)
+        if wake_detected:
+            if question:
+                wake_armed_until = 0.0
+                await send_transcript(question)
+                return
+
+            wake_armed_until = time.monotonic() + WAKE_WINDOW_SECONDS
+            await websocket.send_json(
+                {
+                    "type": "wake_detected",
+                    "text": spoken_text,
+                    "wake_phrase": WAKE_PHRASE,
+                    "window_seconds": WAKE_WINDOW_SECONDS,
+                }
+            )
+            return
+
+        if time.monotonic() <= wake_armed_until:
+            wake_armed_until = 0.0
+            await send_transcript(spoken_text)
+            return
+
+        wake_armed_until = 0.0
+        await websocket.send_json(
+            {
+                "type": "wake_ignored",
+                "text": spoken_text,
+                "wake_phrase": WAKE_PHRASE,
+            }
+        )
 
     async def handle_control_message(raw_text: str) -> bool:
         """Handles text control messages such as stop, continue, image_end, image_start, etc.
@@ -253,7 +297,7 @@ async def ask(websocket: WebSocket):
 
     # 2. A Deepgram Session is instantiated
     # On_final_transcript is assigned an event callback where the send_transcript function triggers upon callback being called
-    session = DeepgramSession(on_final_transcript=send_transcript)
+    session = DeepgramSession(on_final_transcript=handle_voice_transcript)
 
     try:
         # 3. Connects to Deepgram
