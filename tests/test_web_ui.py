@@ -38,5 +38,5 @@ def test_demo_client_forwards_wav_and_display_to_esp32():
     assert '"text/plain; charset=utf-8"' in app_js
     assert '"/audio"' in app_js
     assert '"audio/wav"' in app_js
-    assert 'responseAudioFormat === "wav_16000_mono"' in app_js
+    assert 'responseAudioFormat === "wav_44100_stereo"' in app_js
     assert "expectingEsp32Audio = false" in app_js

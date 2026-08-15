@@ -285,8 +285,13 @@ async function handleSocketMessage(event) {
 
   if (message.type === "audio_start") {
     responseAudioFormat = message.audio_format || null;
-    receivingTtsAudio = responseAudioFormat === "pcm_16000" || responseAudioFormat === "wav_16000_mono";
-    expectingEsp32Audio = responseAudioFormat === "wav_16000_mono";
+    receivingTtsAudio =
+      responseAudioFormat === "pcm_16000" ||
+      responseAudioFormat === "wav_16000_mono" ||
+      responseAudioFormat === "wav_44100_stereo";
+    expectingEsp32Audio =
+      responseAudioFormat === "wav_16000_mono" ||
+      responseAudioFormat === "wav_44100_stereo";
     if (!receivingTtsAudio) {
       throw new Error(`Unsupported response audio format: ${message.audio_format || "unknown"}.`);
     }

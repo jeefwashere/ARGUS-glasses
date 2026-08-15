@@ -12,6 +12,7 @@ class FakeBackboardClient:
         self.create_thread_calls = []
         self.add_message_calls = []
         self.send_message_calls = []
+        self.send_message_content = "text answer"
 
     async def create_thread(self, assistant_id):
         self.create_thread_calls.append(assistant_id)
@@ -28,7 +29,7 @@ class FakeBackboardClient:
     async def send_message(self, content, **kwargs):
         self.send_message_calls.append({"content": content, **kwargs})
         return SimpleNamespace(
-            content="text answer",
+            content=self.send_message_content,
             thread_id=kwargs.get("thread_id") or "created-by-send-message",
             assistant_id=kwargs["assistant_id"],
         )
@@ -108,3 +109,48 @@ def test_call_backboard_missing_environment_raises(monkeypatch):
 
     with pytest.raises(ValueError, match="BACKBOARD_API_KEY is missing"):
         asyncio.run(backboard_service.call_backboard("hello"))
+
+
+def test_decide_image_requirement_uses_structured_json_output(fake_backboard):
+    fake_backboard.send_message_content = (
+        '{"needs_image": false, "response": "Paris is the capital of France."}'
+    )
+
+    decision = asyncio.run(
+        backboard_service.decide_image_requirement("What is the capital of France?")
+    )
+
+    assert decision.needs_image is False
+    assert decision.response == "Paris is the capital of France."
+    call = fake_backboard.send_message_calls[0]
+    assert call["json_output"] is True
+    assert call["system_prompt"] == backboard_service.ROUTING_SYSTEM_PROMPT
+
+
+def test_decide_image_requirement_can_request_an_image(fake_backboard):
+    fake_backboard.send_message_content = '{"needs_image": true, "response": null}'
+
+    decision = asyncio.run(
+        backboard_service.decide_image_requirement("What am I looking at?")
+    )
+
+    assert decision.needs_image is True
+    assert decision.response is None
+    assert decision.thread_id == "created-by-send-message"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not json",
+        "[]",
+        '{"needs_image": "yes", "response": null}',
+        '{"needs_image": true, "response": "premature answer"}',
+        '{"needs_image": false, "response": null}',
+    ],
+)
+def test_decide_image_requirement_rejects_invalid_output(fake_backboard, content):
+    fake_backboard.send_message_content = content
+
+    with pytest.raises(ValueError):
+        asyncio.run(backboard_service.decide_image_requirement("question"))

@@ -117,28 +117,33 @@ AI text response
 For a vision request:
 
 ```text
-ESP32 captures image
-    ↓
-image_start
-    ↓
-image bytes
-    ↓
-image_end
-    ↓
-
 User speech
     ↓
 Deepgram transcript
     ↓
-
-transcript + image
+Backboard structured decision: needs_image=true
+    ↓
+take_picture + request_id
+    ↓
+ESP32 captures image
+    ↓
+image_start + request_id
+    ↓
+image bytes
+    ↓
+image_end + request_id
+    ↓
+original transcript + image
     ↓
 Backboard
     ↓
 AI response
 ```
 
-An image is optional. Normal voice questions do not require a camera capture.
+For a text-only question, the structured Backboard decision contains the final
+answer, so Backboard is called once. For a vision question, Backboard is called
+again with the original transcript and captured image. Only the final answer is
+sent to ElevenLabs.
 
 ---
 
@@ -247,6 +252,21 @@ The same WebSocket carries both JSON control messages and binary data.
 
 This allows ARGUS to keep a persistent connection between the hardware and backend.
 
+## Server → Client camera request
+
+When Backboard determines that the current question needs vision, the server sends:
+
+```json
+{
+  "type": "take_picture",
+  "request_id": "abc123"
+}
+```
+
+The ESP32 must return the same `request_id` in `image_start` and `image_end`.
+This prevents an image from being attached to a later question. The server waits
+15 seconds for the image and returns an error instead of waiting indefinitely.
+
 ## Client → Server
 
 ### Microphone audio
@@ -264,6 +284,7 @@ Binary frames sent while no image upload is active are forwarded to Deepgram.
 ```json
 {
   "type": "image_start",
+  "request_id": "abc123",
   "content_type": "image/jpeg"
 }
 ```
@@ -280,7 +301,8 @@ Server response:
 
 ```json
 {
-  "type": "image_started"
+  "type": "image_started",
+  "request_id": "abc123"
 }
 ```
 
@@ -292,7 +314,8 @@ The ESP32 can then send image bytes as binary WebSocket frames.
 
 ```json
 {
-  "type": "image_end"
+  "type": "image_end",
+  "request_id": "abc123"
 }
 ```
 
@@ -300,11 +323,24 @@ Server response:
 
 ```json
 {
-  "type": "image_received"
+  "type": "image_received",
+  "request_id": "abc123"
 }
 ```
 
-The image is temporarily stored until it can be paired with the user's transcript.
+The image is temporarily stored until the matching Backboard turn consumes it.
+Requestless `image_start`/`image_end` messages remain supported as the legacy
+manual-image protocol.
+
+If the ESP32 cannot capture a frame, it can fail the pending request explicitly:
+
+```json
+{
+  "type": "image_error",
+  "request_id": "abc123",
+  "message": "Camera capture failed"
+}
+```
 
 ---
 
@@ -388,7 +424,10 @@ If ElevenLabs successfully generates speech:
 ```json
 {
   "type": "audio_start",
-  "audio_format": "pcm_16000"
+  "audio_format": "wav_44100_stereo",
+  "sample_rate": 44100,
+  "channels": 2,
+  "bits_per_sample": 16
 }
 ```
 
@@ -399,16 +438,18 @@ The next binary WebSocket data contains the generated speech audio.
 ## Audio data
 
 ```text
-[BINARY PCM AUDIO]
+[BINARY WAV AUDIO]
 ```
 
-The current TTS format is:
+ElevenLabs still returns:
 
 ```text
-PCM
-16 kHz
-16-bit audio
+16 kHz mono signed 16-bit PCM
 ```
+
+Before `/ask` sends audio, Python resamples it to 44.1 kHz and duplicates
+the mono signal into signed 16-bit stereo PCM. The result is wrapped in a WAV
+whose header reports 44,100 Hz, two channels, and 16 bits per sample.
 
 This avoids Base64 encoding audio inside JSON and keeps binary transport more efficient.
 
@@ -580,7 +621,9 @@ audio_bytes = b"".join(
 )
 ```
 
-The complete PCM response is then sent to the ESP32 as a binary WebSocket frame.
+For `/ask`, the complete PCM response is converted to 44.1 kHz stereo, wrapped
+as WAV, and sent to the ESP32 as a binary WebSocket frame. The `/voice` route
+continues wrapping the original 16 kHz mono PCM for browser playback.
 
 Future work can stream these chunks directly instead of waiting for the complete TTS response.
 
@@ -1005,7 +1048,7 @@ Add IDs to turns and audio messages:
 {
   "type": "audio_start",
   "turn_id": "123",
-  "audio_format": "pcm_16000"
+  "audio_format": "wav_44100_stereo"
 }
 ```
 
