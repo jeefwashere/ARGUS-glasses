@@ -97,6 +97,7 @@ async def ask(websocket: WebSocket):
                 )
 
                 await websocket.send_bytes(wav_audio)
+                await websocket.send_json({"type": "audio_end"})
             except Exception as ex:
                 print(f"ElevenLabs TTS failed: {ex}")
 
