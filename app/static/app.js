@@ -89,7 +89,7 @@ function forwardAudioToEsp32(wavBytes) {
   return postToEsp32(
     "/audio",
     wavBytes,
-    "text/plain",
+    "audio/wav",
     ESP32_AUDIO_TIMEOUT_MS,
     "Failed to send audio to ESP32",
   );

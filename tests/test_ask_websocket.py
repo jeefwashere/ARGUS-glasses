@@ -8,6 +8,10 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routes import ask as ask_route
+from app.utils.audio import pcm16_to_wav
+
+
+FAKE_PCM_AUDIO = b"\x00\x00\x00\x10\x00\x00\x00\xf0"
 
 
 class FakeDeepgramSession:
@@ -84,7 +88,7 @@ def setup_route_mocks(monkeypatch, backboard=None, transcripts=None):
     backboard = backboard or FakeBackboard()
 
     async def fake_elevenlabs_tts(response_text):
-        return b"fake-pcm-audio"
+        return FAKE_PCM_AUDIO
 
     monkeypatch.setattr(ask_route, "DeepgramSession", FakeDeepgramSession)
     monkeypatch.setattr(ask_route, "call_backboard", backboard)
@@ -96,9 +100,9 @@ def setup_route_mocks(monkeypatch, backboard=None, transcripts=None):
 def assert_audio_frames(websocket):
     assert websocket.receive_json() == {
         "type": "audio_start",
-        "audio_format": "pcm_16000",
+        "audio_format": "wav_16000_mono",
     }
-    assert websocket.receive_bytes() == b"fake-pcm-audio"
+    assert websocket.receive_bytes() == pcm16_to_wav(FAKE_PCM_AUDIO)
     assert websocket.receive_json() == {"type": "audio_end"}
 
 
