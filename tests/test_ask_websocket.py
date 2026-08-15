@@ -150,18 +150,19 @@ def test_visual_question_uses_device_not_browser(monkeypatch):
                 command = device.receive_json()
                 request_id = command["request_id"]
                 assert command == {"type": "take_picture", "request_id": request_id}
+                jpeg_bytes = b"\xff\xd8captured-jpeg\xff\xd9"
                 device.send_text(
                     json.dumps(
                         {
                             "type": "image_start",
                             "request_id": request_id,
                             "content_type": "image/jpeg",
-                            "size": 13,
+                            "size": len(jpeg_bytes),
                         }
                     )
                 )
                 assert device.receive_json()["type"] == "image_started"
-                device.send_bytes(b"captured-jpeg")
+                device.send_bytes(jpeg_bytes)
                 device.send_text(
                     json.dumps({"type": "image_end", "request_id": request_id})
                 )
@@ -172,7 +173,7 @@ def test_visual_question_uses_device_not_browser(monkeypatch):
             device.send_text("close")
     assert [call["question_text"] for call in backboard.calls] == [question, question]
     assert backboard.calls[1]["thread_id"] == "thread-1"
-    assert backboard.calls[1]["image_bytes"] == b"captured-jpeg"
+    assert backboard.calls[1]["image_bytes"] == b"\xff\xd8captured-jpeg\xff\xd9"
     assert not backboard.calls[1]["image"].exists()
 
 

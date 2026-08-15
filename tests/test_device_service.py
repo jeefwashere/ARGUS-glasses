@@ -31,13 +31,16 @@ async def test_command_request_id_and_jpeg_round_trip():
     task = await start_request(manager)
     request_id = socket.sent[-1]["request_id"]
     assert socket.sent[-1] == {"type": "take_picture", "request_id": request_id}
+    jpeg_bytes = b"\xff\xd8jpeg\xff\xd9"
     manager.start_image(connection, {
-        "request_id": request_id, "content_type": "image/jpeg", "size": 4
+        "request_id": request_id,
+        "content_type": "image/jpeg",
+        "size": len(jpeg_bytes),
     })
-    manager.receive_image_bytes(connection, b"jpeg")
+    manager.receive_image_bytes(connection, jpeg_bytes)
     manager.finish_image(connection, {"request_id": request_id})
     path = await task
-    assert path.read_bytes() == b"jpeg"
+    assert path.read_bytes() == jpeg_bytes
     path.unlink()
 
 
@@ -133,7 +136,10 @@ async def test_two_request_ids_cannot_cross_associate():
     second_task = await start_request(manager)
     first_id, second_id = [message["request_id"] for message in socket.sent[-2:]]
     paths = []
-    for request_id, contents in [(second_id, b"second"), (first_id, b"first")]:
+    for request_id, contents in [
+        (second_id, b"\xff\xd8second\xff\xd9"),
+        (first_id, b"\xff\xd8first\xff\xd9"),
+    ]:
         manager.start_image(connection, {
             "request_id": request_id, "content_type": "image/jpeg"
         })
@@ -141,7 +147,10 @@ async def test_two_request_ids_cannot_cross_associate():
         manager.finish_image(connection, {"request_id": request_id})
         paths.append(await (second_task if request_id == second_id else first_task))
     assert not first_task.cancelled()
-    assert {path.read_bytes() for path in paths} == {b"first", b"second"}
+    assert {path.read_bytes() for path in paths} == {
+        b"\xff\xd8first\xff\xd9",
+        b"\xff\xd8second\xff\xd9",
+    }
     for path in paths:
         path.unlink()
 
