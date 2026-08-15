@@ -8,7 +8,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.services.backboard_service import call_backboard, decide_image_requirement
+from app.services.backboard_service import (
+    BackboardVisionError,
+    call_backboard,
+    decide_image_requirement,
+)
 from app.services.deepgram_service import DeepgramSession
 from app.services.device_service import (
     CameraCaptureError,
@@ -185,6 +189,8 @@ async def ask(websocket: WebSocket):
                 await send_final_answer(answer, thread_id)
             except CameraCaptureError as exc:
                 await send_error(str(exc), exc.request_id)
+            except BackboardVisionError as exc:
+                await send_error(str(exc))
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

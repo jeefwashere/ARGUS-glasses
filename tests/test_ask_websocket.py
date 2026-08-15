@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routes import ask as ask_route
-from app.services.backboard_service import BackboardDecision
+from app.services.backboard_service import BackboardDecision, BackboardVisionError
 from app.utils.audio import pcm16_mono_16k_to_stereo_44100, pcm16_to_wav
 
 FAKE_PCM_AUDIO = b"\x00\x00\x00\x10\x00\x00\x00\xf0"
@@ -182,6 +182,48 @@ def test_visual_question_uses_device_not_browser(monkeypatch):
     assert backboard.calls[1]["thread_id"] == "thread-1"
     assert backboard.calls[1]["image_bytes"] == b"\xff\xd8captured-jpeg\xff\xd9"
     assert not backboard.calls[1]["image"].exists()
+
+
+def test_visual_question_reports_backboard_vision_failure(monkeypatch):
+    question = "What am I looking at?"
+    setup_route_mocks(monkeypatch, vision_questions=[question])
+
+    async def fail_vision(*_args, **_kwargs):
+        raise BackboardVisionError("Backboard vision request failed")
+
+    monkeypatch.setattr(ask_route, "call_backboard", fail_vision)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/device?device_id=argus-1") as device:
+            device.receive_json()
+            with client.websocket_connect("/ask") as browser:
+                browser.send_text(json.dumps({"type": "question", "text": question}))
+                assert browser.receive_json()["type"] == "transcript"
+                request_id = device.receive_json()["request_id"]
+                jpeg_bytes = b"\xff\xd8captured-jpeg\xff\xd9"
+                device.send_text(
+                    json.dumps(
+                        {
+                            "type": "image_start",
+                            "request_id": request_id,
+                            "content_type": "image/jpeg",
+                            "size": len(jpeg_bytes),
+                        }
+                    )
+                )
+                assert device.receive_json()["type"] == "image_started"
+                device.send_bytes(jpeg_bytes)
+                device.send_text(
+                    json.dumps({"type": "image_end", "request_id": request_id})
+                )
+                assert device.receive_json()["type"] == "image_received"
+                assert browser.receive_json()["type"] == "camera_frame"
+                assert browser.receive_json() == {
+                    "type": "error",
+                    "message": "Backboard vision request failed",
+                }
+                browser.send_text("close")
+            device.send_text("close")
 
 
 def test_visual_question_fails_immediately_when_device_offline(monkeypatch):

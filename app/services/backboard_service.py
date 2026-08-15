@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from backboard import BackboardClient
+
+logger = logging.getLogger(__name__)
 
 LLM_PROVIDER = "openai"
 MODEL_NAME = "gpt-4o"
@@ -29,6 +32,10 @@ class BackboardDecision:
     response: str | None
     thread_id: str
     assistant_id: str
+
+
+class BackboardVisionError(RuntimeError):
+    """Raised when Backboard cannot process a validated image message."""
 
 
 def _get_required_env(name: str) -> str:
@@ -116,20 +123,51 @@ async def call_backboard(
     client = _get_client()
     assistant_id = _get_required_env("BACKBOARD_ASSISTANT_ID")
 
-    # Message with image
+    # Inline image attachment for a vision-capable model. This is deliberately
+    # different from Backboard's persistent document/RAG upload endpoints.
     if image:
+        image_path = Path(image)
+        if not image_path.is_file():
+            raise ValueError(f"Backboard vision image does not exist: {image_path}")
+
+        image_size = image_path.stat().st_size
+        if image_size == 0:
+            raise ValueError(f"Backboard vision image is empty: {image_path}")
+
+        logger.info(
+            "[BACKBOARD VISION] Sending image path=%s size=%s",
+            image_path,
+            image_size,
+        )
+
         # First message with image needs a thread first
         if not thread_id:
             thread = await client.create_thread(assistant_id)
             thread_id = thread.thread_id
 
-        response = await client.add_message(
-            thread_id=thread_id,
-            content=question_text,
-            files=[image],
-            llm_provider=LLM_PROVIDER,
-            model_name=MODEL_NAME,
-            stream=False,
+        try:
+            response = await client.add_message(
+                thread_id=thread_id,
+                content=question_text,
+                files=[image_path],
+                llm_provider=LLM_PROVIDER,
+                model_name=MODEL_NAME,
+                stream=False,
+                send_to_llm="true",
+            )
+        except Exception as exc:
+            logger.exception(
+                "[BACKBOARD VISION] Vision request failed path=%s size=%s: %s",
+                image_path,
+                image_size,
+                exc,
+            )
+            raise BackboardVisionError("Backboard vision request failed") from exc
+
+        logger.info(
+            "[BACKBOARD VISION] Response received provider=%s model=%s",
+            getattr(response, "model_provider", LLM_PROVIDER),
+            getattr(response, "model_name", MODEL_NAME),
         )
 
     # Text-only message

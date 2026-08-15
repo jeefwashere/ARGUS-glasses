@@ -13,6 +13,7 @@ class FakeBackboardClient:
         self.add_message_calls = []
         self.send_message_calls = []
         self.send_message_content = "text answer"
+        self.add_message_error = None
 
     async def create_thread(self, assistant_id):
         self.create_thread_calls.append(assistant_id)
@@ -20,6 +21,8 @@ class FakeBackboardClient:
 
     async def add_message(self, **kwargs):
         self.add_message_calls.append(kwargs)
+        if self.add_message_error is not None:
+            raise self.add_message_error
         return SimpleNamespace(
             content="image answer",
             thread_id=kwargs["thread_id"],
@@ -81,6 +84,7 @@ def test_call_backboard_image_without_thread_creates_thread(fake_backboard, tmp_
     assert fake_backboard.create_thread_calls == ["assistant-id"]
     assert fake_backboard.add_message_calls[0]["thread_id"] == "created-thread"
     assert fake_backboard.add_message_calls[0]["files"] == [image]
+    assert fake_backboard.add_message_calls[0]["send_to_llm"] == "true"
 
 
 def test_call_backboard_image_with_existing_thread(fake_backboard, tmp_path):
@@ -95,6 +99,52 @@ def test_call_backboard_image_with_existing_thread(fake_backboard, tmp_path):
     assert fake_backboard.create_thread_calls == []
     assert fake_backboard.add_message_calls[0]["thread_id"] == "thread-1"
     assert fake_backboard.add_message_calls[0]["files"] == [image]
+    assert result == {
+        "content": "image answer",
+        "thread_id": "thread-1",
+        "assistant_id": "assistant-id",
+    }
+
+
+def test_call_backboard_missing_image_fails_before_api_call(
+    fake_backboard, tmp_path
+):
+    image = tmp_path / "missing.jpg"
+
+    with pytest.raises(ValueError, match="vision image does not exist"):
+        asyncio.run(backboard_service.call_backboard("look", image=image))
+
+    assert fake_backboard.create_thread_calls == []
+    assert fake_backboard.add_message_calls == []
+
+
+def test_call_backboard_empty_image_fails_before_api_call(fake_backboard, tmp_path):
+    image = tmp_path / "empty.jpg"
+    image.touch()
+
+    with pytest.raises(ValueError, match="vision image is empty"):
+        asyncio.run(backboard_service.call_backboard("look", image=image))
+
+    assert fake_backboard.create_thread_calls == []
+    assert fake_backboard.add_message_calls == []
+
+
+def test_call_backboard_vision_api_failure_is_distinct(fake_backboard, tmp_path):
+    image = tmp_path / "frame.jpg"
+    image.write_bytes(b"image")
+    fake_backboard.add_message_error = RuntimeError("upstream rejected image")
+
+    with pytest.raises(
+        backboard_service.BackboardVisionError,
+        match="Backboard vision request failed",
+    ):
+        asyncio.run(
+            backboard_service.call_backboard(
+                "look",
+                image=image,
+                thread_id="existing-thread",
+            )
+        )
 
 
 def test_call_backboard_missing_question_raises(fake_backboard):
