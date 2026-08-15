@@ -8,6 +8,40 @@ from deepgram import AsyncDeepgramClient
 FinalTranscriptCallback = Callable[[str], Awaitable[None]]
 
 
+def _message_field(message: Any, name: str, default: Any = None) -> Any:
+    """Read fields from both SDK models and raw dictionary responses."""
+    if isinstance(message, dict):
+        return message.get(name, default)
+    return getattr(message, name, default)
+
+
+async def transcribe_recording(audio_bytes: bytes) -> str:
+    """Transcribe a complete browser recording with Deepgram's media API."""
+    api_key = os.getenv("DEEPGRAM_API_KEY")
+    if not api_key:
+        raise RuntimeError("DEEPGRAM_API_KEY is not set")
+
+    client = AsyncDeepgramClient(api_key=api_key)
+    response = await client.listen.v1.media.transcribe_file(
+        request=audio_bytes,
+        model="nova-3",
+        keyterm=["Hi Spider"],
+        punctuate=True,
+        smart_format=True,
+    )
+
+    results = _message_field(response, "results")
+    channels = _message_field(results, "channels", [])
+    if not channels:
+        return ""
+
+    alternatives = _message_field(channels[0], "alternatives", [])
+    if not alternatives:
+        return ""
+
+    return (_message_field(alternatives[0], "transcript", "") or "").strip()
+
+
 class DeepgramSession:
     """Async wrapper around Deepgram Flux's streaming websocket."""
 
@@ -76,7 +110,7 @@ class DeepgramSession:
             raise RuntimeError("Deepgram session is not connected")
 
         async for message in self._socket:
-            message_type = getattr(message, "type", None)
+            message_type = _message_field(message, "type")
 
             if message_type == "Connected":
                 print("Deepgram Flux connection opened")
@@ -91,8 +125,8 @@ class DeepgramSession:
             if message_type != "TurnInfo":
                 continue
 
-            event = getattr(message, "event", None)
-            transcript = (getattr(message, "transcript", "") or "").strip()
+            event = _message_field(message, "event")
+            transcript = (_message_field(message, "transcript", "") or "").strip()
 
             if event == "StartOfTurn":
                 print("Deepgram StartOfTurn")

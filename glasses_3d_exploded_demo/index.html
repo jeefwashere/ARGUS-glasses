@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>ARGUS Exploded Glasses Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.js",
+          "three/addons/": "./vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <section
+      id="technology-showcase"
+      class="technology-showcase"
+      aria-labelledby="technology-heading"
+    >
+      <div class="technology-stage">
+        <div class="technology-copy">
+          <p class="technology-kicker">Technology</p>
+          <h1 id="technology-heading">
+            <span>Innovation you can</span>
+            <span>see, hear and feel.</span>
+          </h1>
+          <p class="technology-lede">
+            <strong>Pushing boundaries from the inside out.</strong> Spatial
+            experiences on ARGUS are only possible through purposeful
+            engineering. A high resolution display, immersive audio, a
+            responsive dual chip design and a precise array of cameras and
+            sensors work together to create an experience you have to see to
+            believe.
+          </p>
+        </div>
+
+        <div class="technology-model" aria-label="Interactive exploded glasses model">
+          <canvas id="exploded-canvas" aria-hidden="true"></canvas>
+          <div id="exploded-status" class="exploded-status" role="status" aria-live="polite">
+            Loading 3D model
+          </div>
+          <div id="exploded-fallback" class="exploded-fallback" hidden>
+            The 3D model could not be loaded.
+          </div>
+        </div>
+
+        <div class="technology-scroll-note" aria-hidden="true">
+          <span class="technology-scroll-line"></span>
+          <span>Scroll to explore</span>
+        </div>
+        <div class="technology-progress" aria-hidden="true">
+          <span id="technology-progress-bar"></span>
+        </div>
+
+        <div class="technology-stage-indicator" aria-live="polite">
+          <p id="technology-stage-label">Complete glasses</p>
+          <div class="technology-stage-dots" role="list" aria-label="Exploded view stages">
+            <span data-stage-dot role="listitem" aria-current="step"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+            <span data-stage-dot role="listitem" aria-current="false"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main id="interactive-demo" class="argus-demo">
+      <header class="argus-demo__intro">
+        <p class="demo-kicker">ARGUS / LIVE SYSTEM</p>
+        <h2>Ask what you see.</h2>
+        <p>
+          Use the same multimodal pipeline as the glasses: attach a camera
+          frame, type a question or speak with the “Hi Spider” wake phrase,
+          then hear and read ARGUS&rsquo;s response.
+        </p>
+      </header>
+
+      <section class="demo-console" aria-labelledby="demo-console-heading">
+        <div class="demo-console__bar">
+          <div>
+            <span class="demo-console__signal" aria-hidden="true"></span>
+            <span id="connection-state">Disconnected</span>
+          </div>
+          <label class="endpoint-field" for="ask-endpoint">
+            <span>ASK ENDPOINT</span>
+            <input
+              id="ask-endpoint"
+              value="wss://cutc-2026-glasses.onrender.com/ws/ask"
+              spellcheck="false"
+            />
+          </label>
+          <button id="connect-argus" class="console-button console-button--quiet" type="button">
+            Connect
+          </button>
+        </div>
+
+        <div class="demo-console__grid">
+          <div class="demo-inputs">
+            <section class="camera-input" aria-labelledby="camera-heading">
+              <div class="console-heading">
+                <div>
+                  <p>01 / CAMERA</p>
+                  <h3 id="camera-heading">Give ARGUS vision</h3>
+                </div>
+                <button id="clear-image" class="text-button" type="button" hidden>Remove</button>
+              </div>
+              <label id="image-drop-zone" class="image-drop-zone" for="image-input">
+                <img id="image-preview" alt="Selected camera frame" hidden />
+                <span id="image-placeholder">
+                  <strong>Drop a frame here</strong>
+                  <small>or choose/capture a JPEG, PNG, or WebP image</small>
+                </span>
+                <input
+                  id="image-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                />
+              </label>
+            </section>
+
+            <section class="voice-input" aria-labelledby="voice-heading">
+              <div class="console-heading">
+                <div>
+                  <p>02 / VOICE</p>
+                  <h3 id="voice-heading">Speak naturally</h3>
+                </div>
+                <span id="microphone-state" class="microphone-state">Permission needed</span>
+              </div>
+              <div class="microphone-controls">
+                <select id="audio-input" aria-label="Microphone input" disabled>
+                  <option value="">Enable microphone to load devices</option>
+                </select>
+                <button id="enable-microphone" class="console-button console-button--quiet" type="button">
+                  Enable mic
+                </button>
+                <button id="toggle-listening" class="console-button console-button--voice" type="button" disabled>
+                  <span aria-hidden="true">●</span> Start listening
+                </button>
+              </div>
+              <div class="voice-meter" aria-hidden="true"><span id="voice-meter-fill"></span></div>
+              <p class="voice-hint">Say “Hi Spider,” ask your question, then pause.</p>
+            </section>
+
+            <form id="question-form" class="question-input">
+              <label for="question-text">03 / TEXT PROMPT</label>
+              <div>
+                <textarea
+                  id="question-text"
+                  rows="2"
+                  placeholder="What am I looking at?"
+                  required
+                ></textarea>
+                <button id="send-question" class="console-button console-button--send" type="submit">
+                  Ask ARGUS <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+              <div class="prompt-suggestions" aria-label="Example prompts">
+                <button type="button" data-prompt="What am I looking at?">Identify scene</button>
+                <button type="button" data-prompt="Read and summarize the text in this image.">Read text</button>
+                <button type="button" data-prompt="Translate the visible text into English.">Translate</button>
+              </div>
+            </form>
+          </div>
+
+          <aside class="argus-output" aria-live="polite">
+            <div class="argus-output__display">
+              <div class="hud-corners" aria-hidden="true"></div>
+              <div class="argus-output__status">
+                <span>ARGUS DISPLAY</span>
+                <span id="inference-state">STANDBY</span>
+              </div>
+              <div class="argus-output__reticle" aria-hidden="true"><span></span></div>
+              <div class="result-block">
+                <p>YOU SAID</p>
+                <div id="transcript">Waiting for a prompt.</div>
+              </div>
+              <div class="result-block result-block--answer">
+                <p>ARGUS RESPONSE</p>
+                <div id="answer">Connect to begin a live session.</div>
+              </div>
+              <div class="audio-state">
+                <span id="audio-indicator" aria-hidden="true"></span>
+                <span id="audio-state">Voice response ready</span>
+              </div>
+            </div>
+            <p id="demo-status" class="demo-status" role="status">
+              Start the FastAPI backend, then connect to the ask endpoint.
+            </p>
+            <div id="demo-error" class="demo-error" role="alert" hidden></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <script src="./vendor/gsap/gsap.min.js"></script>
+    <script src="./vendor/gsap/ScrollTrigger.min.js"></script>
+    <script type="module" src="./exploded-view.js"></script>
+    <script type="module" src="./interactive-demo.js"></script>
+  </body>
+</html>

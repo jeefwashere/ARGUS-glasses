@@ -140,6 +140,36 @@ def test_listen_emits_final_transcript_on_end_of_turn():
     assert transcripts == ["What am I looking at?"]
 
 
+def test_listen_accepts_dictionary_messages_from_deepgram_sdk_v7():
+    transcripts = []
+
+    async def collect_transcript(text):
+        transcripts.append(text)
+
+    messages = [
+        {"type": "Connected", "sequence_id": 0},
+        {
+            "type": "TurnInfo",
+            "event": "StartOfTurn",
+            "transcript": "Hello",
+        },
+        {
+            "type": "TurnInfo",
+            "event": "EndOfTurn",
+            "transcript": "Hello from AirPods.",
+        },
+    ]
+
+    async def run_test():
+        session = DeepgramSession(on_final_transcript=collect_transcript)
+        session._socket = FakeSocket(messages=messages)
+        await session._listen()
+
+    asyncio.run(run_test())
+
+    assert transcripts == ["Hello from AirPods."]
+
+
 def test_listen_raises_on_deepgram_error_messages():
     messages = [
         SimpleNamespace(type="ConfigureFailure", reason="bad config"),

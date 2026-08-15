@@ -103,7 +103,9 @@ def assert_audio_frames(websocket):
 
 
 def test_first_question_speech_only(monkeypatch):
-    backboard = setup_route_mocks(monkeypatch, transcripts=["What am I looking at?"])
+    backboard = setup_route_mocks(
+        monkeypatch, transcripts=["Hi Spider, What am I looking at?"]
+    )
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_bytes(b"audio")
@@ -140,7 +142,7 @@ def test_follow_up_speech_only_reuses_thread_id(monkeypatch):
                 {"content": "second answer", "thread_id": "thread-123", "assistant_id": "a"},
             ]
         ),
-        transcripts=["first question", "second question"],
+        transcripts=["Hi Spider, first question", "Hi Spider, second question"],
     )
 
     with TestClient(app).websocket_connect("/ask") as websocket:
@@ -161,7 +163,7 @@ def test_follow_up_speech_only_reuses_thread_id(monkeypatch):
 
 def test_first_question_speech_with_chunked_image(monkeypatch):
     image_bytes = b"jpeg-part-1-jpeg-part-2"
-    backboard = setup_route_mocks(monkeypatch, transcripts=["describe this"])
+    backboard = setup_route_mocks(monkeypatch, transcripts=["Hi Spider, describe this"])
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_text(
@@ -197,7 +199,7 @@ def test_follow_up_speech_with_image_reuses_thread_id(monkeypatch):
                 {"content": "second", "thread_id": "thread-abc", "assistant_id": "a"},
             ]
         ),
-        transcripts=["first", "second with image"],
+        transcripts=["Hi Spider, first", "Hi Spider, second with image"],
     )
 
     with TestClient(app).websocket_connect("/ask") as websocket:
@@ -226,7 +228,9 @@ def test_follow_up_speech_with_image_reuses_thread_id(monkeypatch):
 
 def test_transcript_arrives_before_image_end_waits(monkeypatch):
     FakeDeepgramSession.wait_for_release = True
-    backboard = setup_route_mocks(monkeypatch, transcripts=["question with pending image"])
+    backboard = setup_route_mocks(
+        monkeypatch, transcripts=["Hi Spider, question with pending image"]
+    )
     FakeDeepgramSession.wait_for_release = True
 
     with TestClient(app).websocket_connect("/ask") as websocket:
@@ -252,7 +256,9 @@ def test_transcript_arrives_before_image_end_waits(monkeypatch):
 
 
 def test_image_finishes_before_transcript_waits(monkeypatch):
-    backboard = setup_route_mocks(monkeypatch, transcripts=["late transcript"])
+    backboard = setup_route_mocks(
+        monkeypatch, transcripts=["Hi Spider, late transcript"]
+    )
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_text(
@@ -274,7 +280,7 @@ def test_image_finishes_before_transcript_waits(monkeypatch):
 
 
 def test_normal_speech_only_submits_immediately(monkeypatch):
-    backboard = setup_route_mocks(monkeypatch, transcripts=["speech only"])
+    backboard = setup_route_mocks(monkeypatch, transcripts=["Hi Spider, speech only"])
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_bytes(b"audio")
@@ -285,6 +291,50 @@ def test_normal_speech_only_submits_immediately(monkeypatch):
 
     assert len(backboard.calls) == 1
     assert backboard.calls[0]["image"] is None
+
+
+def test_speech_without_wake_phrase_is_ignored(monkeypatch):
+    backboard = setup_route_mocks(
+        monkeypatch, transcripts=["this should not trigger a reply"]
+    )
+
+    with TestClient(app).websocket_connect("/ask") as websocket:
+        websocket.send_bytes(b"audio")
+        assert websocket.receive_json() == {
+            "type": "wake_ignored",
+            "text": "this should not trigger a reply",
+            "wake_phrase": "Hi Spider",
+        }
+        websocket.send_text("close")
+
+    assert backboard.calls == []
+
+
+def test_wake_phrase_alone_arms_the_next_utterance(monkeypatch):
+    backboard = setup_route_mocks(
+        monkeypatch, transcripts=["Hi Spider", "what am I looking at?"]
+    )
+
+    with TestClient(app).websocket_connect("/ask") as websocket:
+        websocket.send_bytes(b"wake-audio")
+        assert websocket.receive_json() == {
+            "type": "wake_detected",
+            "text": "Hi Spider",
+            "wake_phrase": "Hi Spider",
+            "window_seconds": 10,
+        }
+
+        websocket.send_bytes(b"question-audio")
+        assert websocket.receive_json() == {
+            "type": "transcript",
+            "text": "what am I looking at?",
+        }
+        assert websocket.receive_json()["type"] == "answer"
+        assert_audio_frames(websocket)
+        websocket.send_text("close")
+
+    assert len(backboard.calls) == 1
+    assert backboard.calls[0]["question_text"] == "what am I looking at?"
 
 
 def test_unsupported_image_type_returns_error(monkeypatch):
@@ -303,7 +353,7 @@ def test_unsupported_image_type_returns_error(monkeypatch):
 
 
 def test_duplicate_image_start_does_not_overwrite_upload(monkeypatch):
-    backboard = setup_route_mocks(monkeypatch, transcripts=["question"])
+    backboard = setup_route_mocks(monkeypatch, transcripts=["Hi Spider, question"])
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_text(
@@ -346,7 +396,7 @@ def test_backboard_failure_sends_safe_error_and_deletes_image(monkeypatch):
     backboard = setup_route_mocks(
         monkeypatch,
         backboard=FakeBackboard(error=RuntimeError("secret backend detail")),
-        transcripts=["question"],
+        transcripts=["Hi Spider, question"],
     )
 
     with TestClient(app).websocket_connect("/ask") as websocket:
@@ -391,7 +441,7 @@ def test_disconnect_during_image_upload_deletes_temp_file(monkeypatch, tmp_path)
 
 
 def test_set_thread_uses_existing_thread_id(monkeypatch):
-    backboard = setup_route_mocks(monkeypatch, transcripts=["question"])
+    backboard = setup_route_mocks(monkeypatch, transcripts=["Hi Spider, question"])
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_text(json.dumps({"type": "set_thread", "thread_id": "existing-id"}))
@@ -418,7 +468,7 @@ def test_close_messages_close_cleanly(monkeypatch):
 
 
 def test_invalid_json_control_message_keeps_connection_usable(monkeypatch):
-    backboard = setup_route_mocks(monkeypatch, transcripts=["still works"])
+    backboard = setup_route_mocks(monkeypatch, transcripts=["Hi Spider, still works"])
 
     with TestClient(app).websocket_connect("/ask") as websocket:
         websocket.send_text("{not-json")
