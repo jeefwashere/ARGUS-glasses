@@ -126,9 +126,7 @@ class DeviceManager:
             await self.unregister(connection)
             if future.done() and not future.cancelled():
                 future.exception()
-            raise CameraCaptureError(
-                "Camera device disconnected", request_id
-            ) from exc
+            raise CameraCaptureError("Camera device disconnected", request_id) from exc
 
         try:
             image_path = await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
@@ -212,43 +210,124 @@ class DeviceManager:
 
     def finish_image(self, connection: DeviceConnection, message: dict) -> dict:
         request_id = self._request_id(message)
+
         upload = connection.upload
         if upload is None:
-            raise DeviceProtocolError("No image upload is in progress", request_id)
-        if upload.request_id != request_id:
             raise DeviceProtocolError(
-                "image_end request_id does not match image_start", request_id
+                "No image upload is in progress",
+                request_id,
             )
 
+        if upload.request_id != request_id:
+            raise DeviceProtocolError(
+                "image_end request_id does not match image_start",
+                request_id,
+            )
+
+        # Closing also flushes all received WebSocket bytes to disk.
         upload.file.close()
         connection.upload = None
+
         logger.info(
             "[DEVICE] received %s bytes request_id=%s",
             upload.bytes_received,
             request_id,
         )
-        logger.info("[DEVICE] image_end request_id=%s", request_id)
+
+        logger.info(
+            "[CAMERA] expected=%s received=%s content_type=%s path=%s",
+            upload.expected_size,
+            upload.bytes_received,
+            upload.content_type,
+            upload.path,
+        )
 
         error: str | None = None
+
+        # Existing size validation.
         if upload.bytes_received == 0:
             error = "Camera returned an empty image"
+
         elif (
             upload.expected_size is not None
             and upload.bytes_received != upload.expected_size
         ):
             error = "Camera image size does not match image_start"
 
+        # Validate the actual file received from the ESP32.
+        image_bytes = b""
+
+        if error is None:
+            try:
+                image_bytes = upload.path.read_bytes()
+
+                logger.info(
+                    "[CAMERA] actual_file_size=%s first_bytes=%s last_bytes=%s",
+                    len(image_bytes),
+                    image_bytes[:8].hex(),
+                    image_bytes[-8:].hex(),
+                )
+
+                if len(image_bytes) != upload.bytes_received:
+                    error = "Camera image file size does not match received byte count"
+
+                elif upload.content_type == "image/jpeg":
+                    # JPEG must begin with FF D8.
+                    if not image_bytes.startswith(b"\xff\xd8"):
+                        error = "Camera returned invalid JPEG header"
+
+                    # JPEG should terminate with FF D9.
+                    elif not image_bytes.endswith(b"\xff\xd9"):
+                        error = "Camera returned incomplete JPEG"
+
+                    else:
+                        logger.info(
+                            "[CAMERA] Valid JPEG received request_id=%s size=%s",
+                            request_id,
+                            len(image_bytes),
+                        )
+
+            except Exception as exc:
+                logger.exception(
+                    "[CAMERA] Failed to inspect received image request_id=%s: %s",
+                    request_id,
+                    exc,
+                )
+                error = "Camera image could not be validated"
+
         if error is not None:
+            logger.error(
+                "[CAMERA] Invalid image request_id=%s error=%s",
+                request_id,
+                error,
+            )
+
             upload.path.unlink(missing_ok=True)
             self._fail_capture(request_id, error)
+
             raise DeviceProtocolError(error, request_id)
 
         pending = self._owned_pending(connection, request_id)
+
         if pending.future.done():
             upload.path.unlink(missing_ok=True)
-            raise DeviceProtocolError("Image request is no longer pending", request_id)
+            raise DeviceProtocolError(
+                "Image request is no longer pending",
+                request_id,
+            )
+
+        # The image has passed transfer + basic JPEG validation.
         pending.future.set_result(upload.path)
-        return {"type": "image_received", "request_id": request_id}
+
+        logger.info(
+            "[CAMERA] Capture completed and validated request_id=%s",
+            request_id,
+        )
+
+        return {
+            "type": "image_received",
+            "request_id": request_id,
+        }
 
     def image_error(self, connection: DeviceConnection, message: dict) -> None:
         request_id = self._request_id(message)
