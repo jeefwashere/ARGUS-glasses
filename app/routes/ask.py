@@ -1,15 +1,18 @@
 import asyncio
 import json
 import logging
-import tempfile
 import time
-import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.services.backboard_service import call_backboard, decide_image_requirement
 from app.services.deepgram_service import DeepgramSession
+from app.services.device_service import (
+    CameraCaptureError,
+    configured_device_id,
+    device_manager,
+)
 from app.services.elevenlabs_service import elevenlabs_tts
 from app.utils.audio import pcm16_mono_16k_to_stereo_44100, pcm16_to_wav
 from app.utils.wake_word import WAKE_PHRASE, extract_wake_question
@@ -17,20 +20,8 @@ from app.utils.wake_word import WAKE_PHRASE, extract_wake_question
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-ALLOWED_IMAGE_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-}
-
 WAKE_WINDOW_SECONDS = 10
 IMAGE_TIMEOUT_SECONDS = 15
-
-
-class CameraCaptureError(RuntimeError):
-    def __init__(self, message: str, request_id: str | None = None):
-        super().__init__(message)
-        self.request_id = request_id
 
 
 @router.websocket("/ask")
@@ -42,14 +33,6 @@ async def ask(websocket: WebSocket):
     turn_lock = asyncio.Lock()
     send_lock = asyncio.Lock()
     turn_tasks: set[asyncio.Task] = set()
-
-    # Each requested camera image resolves exactly one waiting conversation turn.
-    pending_images: dict[str, asyncio.Future[Path]] = {}
-    legacy_image_future: asyncio.Future[Path] | None = None
-    upload_file = None
-    upload_path: Path | None = None
-    upload_request_id: str | None = None
-    receiving_image = False
 
     async def send_json(message: dict) -> None:
         async with send_lock:
@@ -64,40 +47,6 @@ async def ask(websocket: WebSocket):
     def delete_path(path: Path | None) -> None:
         if path:
             path.unlink(missing_ok=True)
-
-    def discard_active_upload(expected_request_id: str | None) -> None:
-        nonlocal receiving_image, upload_file, upload_path, upload_request_id
-
-        if not receiving_image or upload_request_id != expected_request_id:
-            return
-        if upload_file is not None:
-            upload_file.close()
-        delete_path(upload_path)
-        upload_file = None
-        upload_path = None
-        upload_request_id = None
-        receiving_image = False
-
-    async def request_picture(request_id: str) -> None:
-        logger.info("Requesting camera image... request_id=%s", request_id)
-        await send_json({"type": "take_picture", "request_id": request_id})
-
-    async def wait_for_picture() -> Path:
-        nonlocal receiving_image, upload_file, upload_path, upload_request_id
-
-        request_id = uuid.uuid4().hex
-        future: asyncio.Future[Path] = asyncio.get_running_loop().create_future()
-        pending_images[request_id] = future
-        await request_picture(request_id)
-
-        try:
-            return await asyncio.wait_for(future, timeout=IMAGE_TIMEOUT_SECONDS)
-        except TimeoutError as exc:
-            logger.warning("Camera image timed out request_id=%s", request_id)
-            discard_active_upload(request_id)
-            raise CameraCaptureError("Camera image timed out", request_id) from exc
-        finally:
-            pending_images.pop(request_id, None)
 
     async def send_final_answer(answer: str, current_thread_id: str) -> None:
         await send_json(
@@ -146,7 +95,7 @@ async def ask(websocket: WebSocket):
             )
 
     async def process_turn(question_text: str) -> None:
-        nonlocal thread_id, legacy_image_future
+        nonlocal thread_id
 
         image_path: Path | None = None
         async with turn_lock:
@@ -157,28 +106,17 @@ async def ask(websocket: WebSocket):
                 )
                 thread_id = decision.thread_id
                 logger.info(
-                    "Backboard decision: needs_image=%s", decision.needs_image
+                    "[BACKBOARD] needs_image=%s", str(decision.needs_image).lower()
                 )
 
-                # Requestless image_start/image_end remains an explicit manual
-                # attachment for clients using the original protocol.
-                if legacy_image_future is not None:
-                    manual_image = legacy_image_future
-                    try:
-                        image_path = await asyncio.wait_for(
-                            manual_image, timeout=IMAGE_TIMEOUT_SECONDS
-                        )
-                    except TimeoutError as exc:
-                        discard_active_upload(None)
-                        raise CameraCaptureError("Camera image timed out") from exc
-                    finally:
-                        if legacy_image_future is manual_image:
-                            legacy_image_future = None
-
-                if decision.needs_image or image_path is not None:
-                    if image_path is None:
-                        image_path = await wait_for_picture()
-                    logger.info("Sending question + image to Backboard...")
+                if decision.needs_image:
+                    image_path = await device_manager.request_picture(
+                        device_id=configured_device_id(),
+                        timeout=IMAGE_TIMEOUT_SECONDS,
+                    )
+                    logger.info(
+                        "[BACKBOARD] Sending original question + captured image"
+                    )
                     result = await call_backboard(
                         question_text=question_text,
                         image=image_path,
@@ -186,6 +124,7 @@ async def ask(websocket: WebSocket):
                     )
                     thread_id = result["thread_id"]
                     answer = result["content"]
+                    logger.info("[BACKBOARD] Final response received")
                 else:
                     answer = decision.response
 
@@ -251,8 +190,7 @@ async def ask(websocket: WebSocket):
         )
 
     async def handle_control_message(raw_text: str) -> bool:
-        nonlocal thread_id, legacy_image_future
-        nonlocal receiving_image, upload_file, upload_path, upload_request_id
+        nonlocal thread_id
 
         if raw_text == "close":
             return False
@@ -288,95 +226,6 @@ async def ask(websocket: WebSocket):
             await send_json({"type": "thread_set", "thread_id": thread_id})
             return True
 
-        if message_type == "image_start":
-            if receiving_image:
-                await send_error("An image upload is already in progress")
-                return True
-
-            request_id = message.get("request_id")
-            if request_id is not None:
-                if request_id not in pending_images:
-                    await send_error("Unknown or expired image request", request_id)
-                    return True
-            elif pending_images:
-                await send_error("Camera image requires request_id")
-                return True
-            elif legacy_image_future is not None:
-                await send_error("An unused image is already waiting for a question")
-                return True
-
-            content_type = message.get("content_type")
-            suffix = ALLOWED_IMAGE_TYPES.get(content_type)
-            if suffix is None:
-                await send_error("Unsupported image type", request_id)
-                return True
-
-            upload_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-            upload_path = Path(upload_file.name)
-            upload_request_id = request_id
-            receiving_image = True
-            if request_id is None:
-                legacy_image_future = asyncio.get_running_loop().create_future()
-
-            response = {"type": "image_started"}
-            if request_id:
-                response["request_id"] = request_id
-            await send_json(response)
-            return True
-
-        if message_type == "image_end":
-            if not receiving_image or upload_file is None or upload_path is None:
-                await send_error("No image upload is in progress")
-                return True
-
-            request_id = message.get("request_id")
-            if request_id != upload_request_id:
-                await send_error("image_end request_id does not match image_start")
-                return True
-
-            upload_file.close()
-            completed_path = upload_path
-            completed_request_id = upload_request_id
-            size = completed_path.stat().st_size
-            upload_file = None
-            upload_path = None
-            upload_request_id = None
-            receiving_image = False
-
-            response = {"type": "image_received"}
-            if completed_request_id:
-                response["request_id"] = completed_request_id
-            await send_json(response)
-            logger.info(
-                "ESP32 image received request_id=%s size=%s bytes",
-                completed_request_id or "legacy",
-                size,
-            )
-
-            if completed_request_id:
-                future = pending_images.get(completed_request_id)
-                if future is not None and not future.done():
-                    future.set_result(completed_path)
-                else:
-                    delete_path(completed_path)
-            else:
-                if legacy_image_future is not None and not legacy_image_future.done():
-                    legacy_image_future.set_result(completed_path)
-                else:
-                    delete_path(completed_path)
-            return True
-
-        if message_type == "image_error":
-            request_id = message.get("request_id")
-            future = pending_images.get(request_id)
-            if future is None or future.done():
-                await send_error("Unknown or expired image request", request_id)
-                return True
-            detail = (message.get("message") or "Camera capture failed").strip()
-            discard_active_upload(request_id)
-            future.set_exception(CameraCaptureError(detail, request_id))
-            return True
-
         await send_error("Unknown control message type")
         return True
 
@@ -400,10 +249,7 @@ async def ask(websocket: WebSocket):
             if data is None:
                 continue
 
-            if receiving_image:
-                upload_file.write(data)
-            else:
-                await session.send_audio(data)
+            await session.send_audio(data)
 
     except WebSocketDisconnect:
         logger.info("Client disconnected from /ask")
@@ -420,12 +266,3 @@ async def ask(websocket: WebSocket):
             task.cancel()
         if turn_tasks:
             await asyncio.gather(*turn_tasks, return_exceptions=True)
-
-        if upload_file is not None:
-            upload_file.close()
-        delete_path(upload_path)
-        if legacy_image_future is not None and legacy_image_future.done():
-            try:
-                delete_path(legacy_image_future.result())
-            except (asyncio.CancelledError, Exception):
-                pass

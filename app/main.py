@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 
 from app.routes.ask import router as ask_router
+from app.routes.device import router as device_router
 from app.routes.voice import router as voice_router
 
 app = FastAPI(
@@ -26,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(ask_router)
+app.include_router(device_router)
 app.include_router(voice_router)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
