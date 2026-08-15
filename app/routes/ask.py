@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import json
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -22,6 +24,22 @@ logger = logging.getLogger(__name__)
 
 WAKE_WINDOW_SECONDS = 10
 IMAGE_TIMEOUT_SECONDS = 15
+AUDIO_OUTPUT_BROWSER = "browser"
+AUDIO_OUTPUT_ESP32_BLUETOOTH = "esp32_bluetooth"
+SUPPORTED_AUDIO_OUTPUT_MODES = {
+    AUDIO_OUTPUT_BROWSER,
+    AUDIO_OUTPUT_ESP32_BLUETOOTH,
+}
+
+
+def configured_audio_output_mode() -> str:
+    mode = os.getenv("AUDIO_OUTPUT_MODE", AUDIO_OUTPUT_BROWSER).strip().lower()
+    if mode not in SUPPORTED_AUDIO_OUTPUT_MODES:
+        logger.warning(
+            "Unsupported AUDIO_OUTPUT_MODE=%r; defaulting to browser", mode
+        )
+        return AUDIO_OUTPUT_BROWSER
+    return mode
 
 
 @router.websocket("/ask")
@@ -61,6 +79,23 @@ async def ask(websocket: WebSocket):
                 "16000 Hz mono 16-bit",
                 len(pcm_audio),
             )
+
+            audio_output_mode = configured_audio_output_mode()
+            if audio_output_mode == AUDIO_OUTPUT_BROWSER:
+                wav_audio = pcm16_to_wav(pcm_audio)
+                await send_json(
+                    {
+                        "type": "audio",
+                        "audio_base64": base64.b64encode(wav_audio).decode("ascii"),
+                        "audio_mime_type": "audio/wav",
+                        "audio_format": "wav_16000_mono",
+                        "sample_rate": 16000,
+                        "channels": 1,
+                        "bits_per_sample": 16,
+                    }
+                )
+                return
+
             logger.info(
                 "[AUDIO] Converting for Bluetooth; target: 44100 Hz stereo 16-bit"
             )
@@ -87,9 +122,7 @@ async def ask(websocket: WebSocket):
                 await websocket.send_bytes(wav_audio)
                 await websocket.send_json({"type": "audio_end"})
         except Exception as exc:
-            logger.exception(
-                "ElevenLabs TTS or Bluetooth audio conversion failed: %s", exc
-            )
+            logger.exception("ElevenLabs TTS or audio routing failed: %s", exc)
             await send_json(
                 {"type": "audio_error", "message": "Speech generation failed."}
             )

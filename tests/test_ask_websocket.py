@@ -1,5 +1,8 @@
 import asyncio
+import base64
+import io
 import json
+import wave
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -84,7 +87,24 @@ def setup_route_mocks(monkeypatch, *, transcripts=None, vision_questions=None):
     return backboard
 
 
-def assert_audio_frames(websocket):
+def assert_browser_audio(websocket):
+    message = websocket.receive_json()
+    assert message["type"] == "audio"
+    assert message["audio_mime_type"] == "audio/wav"
+    assert message["audio_format"] == "wav_16000_mono"
+    assert message["sample_rate"] == 16000
+    assert message["channels"] == 1
+    assert message["bits_per_sample"] == 16
+
+    wav_bytes = base64.b64decode(message["audio_base64"])
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+        assert wav_file.getnchannels() == 1
+        assert wav_file.getsampwidth() == 2
+        assert wav_file.getframerate() == 16000
+        assert wav_file.readframes(wav_file.getnframes()) == FAKE_PCM_AUDIO
+
+
+def assert_esp32_audio_frames(websocket):
     assert websocket.receive_json() == {
         "type": "audio_start",
         "audio_format": "wav_44100_stereo",
@@ -100,6 +120,7 @@ def assert_audio_frames(websocket):
 
 
 def test_text_only_question_preserves_audio_response(monkeypatch):
+    monkeypatch.delenv("AUDIO_OUTPUT_MODE", raising=False)
     backboard = setup_route_mocks(
         monkeypatch, transcripts=["Hi Spider, What is five times eight?"]
     )
@@ -107,13 +128,14 @@ def test_text_only_question_preserves_audio_response(monkeypatch):
         browser.send_bytes(b"microphone-pcm")
         assert browser.receive_json()["type"] == "transcript"
         assert browser.receive_json()["type"] == "answer"
-        assert_audio_frames(browser)
+        assert_browser_audio(browser)
         browser.send_text("close")
     assert FakeDeepgramSession.instances[-1].audio_chunks == [b"microphone-pcm"]
     assert backboard.calls[0]["image"] is None
 
 
 def test_visual_question_uses_device_not_browser(monkeypatch):
+    monkeypatch.setenv("AUDIO_OUTPUT_MODE", "browser")
     question = "What am I looking at?"
     backboard = setup_route_mocks(monkeypatch, vision_questions=[question])
     with TestClient(app) as client:
@@ -145,7 +167,7 @@ def test_visual_question_uses_device_not_browser(monkeypatch):
                 )
                 assert device.receive_json()["type"] == "image_received"
                 assert browser.receive_json()["type"] == "answer"
-                assert_audio_frames(browser)
+                assert_browser_audio(browser)
                 browser.send_text("close")
             device.send_text("close")
     assert [call["question_text"] for call in backboard.calls] == [question, question]
@@ -220,8 +242,41 @@ def test_device_requires_explicit_identity():
         assert device.receive_json()["message"] == "device_id query parameter is required"
 
 
+def test_browser_mode_returns_audio_without_bluetooth_conversion(monkeypatch):
+    setup_route_mocks(monkeypatch)
+    monkeypatch.setenv("AUDIO_OUTPUT_MODE", "browser")
+
+    def unexpected_bluetooth_conversion(_audio):
+        raise AssertionError("Browser mode must not enter the ESP32 audio path")
+
+    monkeypatch.setattr(
+        ask_route,
+        "pcm16_mono_16k_to_stereo_44100",
+        unexpected_bluetooth_conversion,
+    )
+    with TestClient(app).websocket_connect("/ask") as browser:
+        browser.send_text(json.dumps({"type": "question", "text": "hello"}))
+        browser.receive_json()
+        browser.receive_json()
+        assert_browser_audio(browser)
+        browser.send_text("close")
+
+
+def test_esp32_bluetooth_mode_preserves_existing_audio_route(monkeypatch):
+    setup_route_mocks(monkeypatch)
+    monkeypatch.setenv("AUDIO_OUTPUT_MODE", "esp32_bluetooth")
+
+    with TestClient(app).websocket_connect("/ask") as browser:
+        browser.send_text(json.dumps({"type": "question", "text": "hello"}))
+        browser.receive_json()
+        browser.receive_json()
+        assert_esp32_audio_frames(browser)
+        browser.send_text("close")
+
+
 def test_bluetooth_conversion_failure_is_graceful(monkeypatch):
     setup_route_mocks(monkeypatch)
+    monkeypatch.setenv("AUDIO_OUTPUT_MODE", "esp32_bluetooth")
 
     def fail_conversion(_audio):
         raise ValueError("bad PCM")
